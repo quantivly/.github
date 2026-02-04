@@ -14,9 +14,7 @@ on:
       LINEAR_API_KEY:
         required: true
         description: Linear API key for issue context retrieval
-      GITHUB_TOKEN:
-        required: false
-        description: GitHub token for API access (defaults to automatic token)
+      # GITHUB_TOKEN is automatically provided by GitHub Actions and doesn't need to be defined
 
 # Note: Concurrency control is handled by the caller workflow
 # (github.event.issue.number is not available in workflow_call context)
