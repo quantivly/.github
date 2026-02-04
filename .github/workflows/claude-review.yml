@@ -18,10 +18,8 @@ on:
         required: false
         description: GitHub token for API access (defaults to automatic token)
 
-# Ensure only one review runs per PR at a time
-concurrency:
-  group: claude-review-${{ github.event.issue.number }}
-  cancel-in-progress: false
+# Note: Concurrency control is handled by the caller workflow
+# (github.event.issue.number is not available in workflow_call context)
 
 permissions:
   contents: read
