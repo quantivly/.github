@@ -100,7 +100,7 @@ Validate Permissions (org member/collaborator)
 Python Script Orchestration
    ├── Fetch PR Context (GitHub API)
    ├── Extract Linear ID (PR title parsing)
-   ├── Start Linear MCP Server (npx @modelcontextprotocol/server-linear)
+   ├── Connect to Linear MCP Server (https://mcp.linear.app/mcp)
    ├── Connect as MCP Client (stdio connection)
    ├── Get Available Linear Tools from MCP
    ├── Read CLAUDE.md (repository guidelines)
@@ -236,7 +236,7 @@ GITHUB_TOKEN           # Auto-provided by GitHub Actions (no setup needed ✓)
 ### External APIs and Services
 
 - **Anthropic API**: claude-sonnet-4-5-20250929 model (with tool use)
-- **Linear MCP Server**: @modelcontextprotocol/server-linear (via npx)
+- **Linear MCP Server**: https://mcp.linear.app/mcp (official hosted HTTP server)
 - **Linear GraphQL API**: https://api.linear.app/graphql (accessed via MCP)
 - **GitHub REST API**: via PyGithub
 
