@@ -82,8 +82,170 @@ def convert_mcp_tools_to_anthropic_format(mcp_tools: list[Any]) -> list[dict[str
     return anthropic_tools
 
 
+def detect_tech_stack(files: list[Any]) -> str:
+    """
+    Detect primary tech stack from changed files.
+
+    Returns one of: 'django', 'react', 'docker', 'mixed'
+    """
+    py_count = 0
+    ts_count = 0
+    docker_count = 0
+
+    for file in files:
+        filename = file.filename.lower()
+
+        if filename.endswith('.py'):
+            py_count += 1
+        elif filename.endswith(('.ts', '.tsx', '.jsx', '.js')):
+            ts_count += 1
+        elif 'dockerfile' in filename or filename == 'docker-compose.yml':
+            docker_count += 1
+
+    # Determine primary stack
+    total = py_count + ts_count + docker_count
+    if total == 0:
+        return 'mixed'
+
+    # Calculate percentages
+    py_pct = py_count / total if total > 0 else 0
+    ts_pct = ts_count / total if total > 0 else 0
+    docker_pct = docker_count / total if total > 0 else 0
+
+    # Dominant stack if >50%
+    if py_pct > 0.5:
+        return 'django'
+    elif ts_pct > 0.5:
+        return 'react'
+    elif docker_pct > 0.5:
+        return 'docker'
+    else:
+        return 'mixed'
+
+
+def get_tech_stack_guidelines(tech_stack: str) -> str:
+    """
+    Return tech-stack-specific security and best practice guidelines.
+
+    These guidelines are added to static_content (cacheable) to provide
+    specialized review focus based on the primary tech stack.
+    """
+    guidelines = {
+        'django': """
+## Django-Specific Security & Best Practices
+
+**Priority Checks**:
+1. **ORM Injection**: Check for `.raw()`, `.extra()`, or string interpolation in queries
+   - Bad: `User.objects.raw(f"SELECT * FROM users WHERE id = {user_id}")`
+   - Good: `User.objects.raw("SELECT * FROM users WHERE id = %s", [user_id])`
+
+2. **GraphQL Security**: Validate query complexity limits and authentication on resolvers
+   - Ensure all resolvers have proper authentication decorators
+   - Check for N+1 query issues (use `.select_related()` / `.prefetch_related()`)
+
+3. **Celery Tasks**: Check for task injection and proper error handling
+   - Validate task arguments are sanitized
+   - Ensure retry logic and failure handling
+
+4. **Django Admin**: Verify CSRF protection and permission checks
+   - Custom admin actions should check permissions
+   - Sensitive operations require confirmation
+
+5. **File Uploads**: Check for file type validation and size limits
+   - Validate file extensions and MIME types
+   - Check for virus scanning integration hooks
+
+6. **Plugin System**: Verify plugin sandboxing and input validation
+   - Plugins should not access database directly (use APIs)
+   - Plugin inputs must be validated and sanitized
+
+7. **Migrations**: Check for safe migrations (no blocking operations)
+   - Avoid adding columns without defaults on large tables
+   - Check for index creation (use CONCURRENTLY in production)
+""",
+        'react': """
+## React/Next.js-Specific Security & Best Practices
+
+**Priority Checks**:
+1. **XSS Prevention**: Check for dangerous patterns
+   - Bad: Direct DOM manipulation with user input
+   - Good: Use React's automatic escaping
+
+2. **API Routes**: Validate authentication and CORS configuration
+   - Check for auth middleware on protected routes
+   - Verify CORS settings don't allow arbitrary origins
+
+3. **State Management**: Check for sensitive data exposure
+   - Bad: PHI or credentials in localStorage/sessionStorage
+   - Good: Sensitive data in memory only or secure httpOnly cookies
+
+4. **Component Security**: Verify prop validation and TypeScript types
+   - Check for proper TypeScript types (avoid `any`)
+   - Validate props with PropTypes or TypeScript
+
+5. **SSR Security**: Check for server-side data leakage
+   - Verify sensitive data isn't serialized to client
+   - Check `getServerSideProps` doesn't expose credentials
+
+6. **Third-Party Libraries**: Flag dependencies with known vulnerabilities
+   - Large bundle sizes (>100KB for single dependency)
+   - Outdated packages with security advisories
+
+7. **Performance**: Check for common React anti-patterns
+   - Missing dependency arrays in useEffect
+   - Unnecessary re-renders (missing memo/useMemo)
+   - N+1 API calls (use batching or caching)
+""",
+        'docker': """
+## Docker/Infrastructure-Specific Security & Best Practices
+
+**Priority Checks**:
+1. **Base Images**: Verify official, minimal base images
+   - Good: `python:3.11-alpine`, `node:20-alpine`, `nginx:alpine`
+   - Bad: `latest` tag, unofficial images, large base images
+
+2. **Secrets Management**: Check for hardcoded credentials
+   - Bad: `ENV DATABASE_PASSWORD=secret123`
+   - Good: Use Docker secrets or environment variables at runtime
+
+3. **User Permissions**: Verify containers run as non-root
+   - Check for `USER` directive (not root)
+   - Verify processes don't require root privileges
+
+4. **Network Isolation**: Check for proper network segmentation
+   - Verify services use specific networks (not default bridge)
+   - Check for unnecessary exposed ports
+
+5. **Volume Mounts**: Check for minimal, read-only mounts where possible
+   - Sensitive directories should be read-only
+   - Avoid mounting entire host filesystem
+
+6. **Image Optimization**: Check for layer optimization
+   - Combine RUN commands to reduce layers
+   - Use .dockerignore to exclude unnecessary files
+   - Multi-stage builds for smaller production images
+
+7. **Health Checks**: Verify HEALTHCHECK directives
+   - All services should have health checks
+   - Health checks should validate actual functionality
+""",
+        'mixed': """
+## Multi-Technology Stack
+
+This PR touches multiple technologies. Focus on:
+1. **Cross-cutting concerns**: Authentication, authorization, data flow
+2. **API boundaries**: Validate contracts between frontend/backend
+3. **Integration security**: Check for consistent security across layers
+4. **Data consistency**: Ensure data models align across stack
+"""
+    }
+
+    return guidelines.get(tech_stack, '')
+
+
 def build_review_prompt(
     pr: Any,
+    files: list[Any],
     linear_id: str | None,
     claude_md: str,
     diff: str,
@@ -93,19 +255,55 @@ def build_review_prompt(
 
     Returns:
         Tuple of (static_content, dynamic_content) for prompt caching optimization.
-        Static content includes role, guidelines, and CLAUDE.md (cacheable).
+        Static content includes role, guidelines, CLAUDE.md, and tech-specific guidelines (cacheable).
         Dynamic content includes PR context and diff (not cacheable).
     """
+    # Detect tech stack for specialized guidance
+    tech_stack = detect_tech_stack(files)
+    tech_guidelines = get_tech_stack_guidelines(tech_stack)
+
+    print(f"🔧 Detected tech stack: {tech_stack}")
+    if tech_guidelines:
+        print(f"✓ Added {tech_stack}-specific review guidelines")
+
+    # Read shared review standards
+    standards_path = Path(__file__).parent.parent / "docs" / "review-standards.md"
+    review_standards = ""
+    if standards_path.exists():
+        review_standards = standards_path.read_text()
+        print("✓ Loaded shared review standards")
+
     # Build static content (cacheable - doesn't change between reviews)
     static_content = f"""# Role
 You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
 
+# Review Standards
+These are the organization-wide code review standards. Follow these for consistency across all reviews.
+
+{review_standards}
+
 # Repository Guidelines
 {claude_md}
+
+{tech_guidelines}
 
 # Your Task
 
 Conduct a comprehensive code review with the following priorities:
+
+## Review Approach: Exhaustive First Pass
+
+**Goal**: Provide complete, thorough feedback in this FIRST review to minimize developer round-trips.
+
+**Be Exhaustive**:
+- Check **EVERY file** for issues (don't skip similar patterns)
+- List **ALL edge cases**, not just representative examples
+- Flag **ALL instances** of a pattern violation (not just the first occurrence)
+- Identify **EVERY untested code path**
+- Validate **EVERY acceptance criterion** from Linear (if applicable)
+- Provide **specific, actionable fixes** with code examples where helpful
+
+**Why This Matters**: Developers will address all issues at once rather than iteratively. A thorough first pass saves 10-15 minutes per PR and reduces frustration.
 
 ## 1. Linear Requirement Validation (If Applicable)
 If a Linear issue is referenced:
@@ -114,6 +312,28 @@ If a Linear issue is referenced:
 - Review comments for additional requirements
 - Validate PR changes align with stated requirements
 - Check for related issues that might provide context
+
+### Linear Issue Quality Assessment (Advisory)
+When you fetch a Linear issue, also assess its quality and provide **advisory feedback** (not blocking):
+
+**Check for**:
+- Clear, measurable acceptance criteria
+- Technical specifications (API contracts, data models, error handling)
+- Edge cases documented
+- Security/compliance requirements mentioned
+- Performance requirements specified
+
+**If issue quality is poor**, include this in your "Alignment with Linear Requirements" section:
+```
+⚠️ **Linear Issue Quality**: This issue could be improved with:
+- Specific acceptance criteria (e.g., "handles 10K records", "loads in <2s")
+- Edge case documentation (empty states, error scenarios)
+- Security requirements (authentication, data validation)
+
+This is advisory only - the review proceeds based on what IS documented.
+```
+
+**Note**: This helps improve issue quality over time for better requirement validation in future PRs.
 
 ## 2. Security Analysis (CRITICAL)
 - OWASP Top 10 vulnerabilities
@@ -622,7 +842,10 @@ async def async_main(args: argparse.Namespace) -> int:
 
         # Fetch PR diff
         print("📥 Fetching PR diff...")
-        files = pr.get_files()  # PyGithub PaginatedList - iteration auto-paginates
+        files_paginated = pr.get_files()  # PyGithub PaginatedList - iteration auto-paginates
+
+        # Convert to list for tech stack detection (need to iterate twice)
+        files = list(files_paginated)
         diff_parts = []
 
         for file in files:  # Iterating handles pagination automatically (all pages fetched)
@@ -640,7 +863,7 @@ async def async_main(args: argparse.Namespace) -> int:
         # Build review prompt with caching optimization
         print("📝 Building review prompt...")
         static_content, dynamic_content = build_review_prompt(
-            pr, linear_id, claude_md, full_diff
+            pr, files, linear_id, claude_md, full_diff
         )
 
         # Call Claude API with MCP integration and prompt caching

@@ -203,6 +203,28 @@ git push origin master
 
 Quantivly uses automated Claude-powered code reviews for pull requests. This section describes how the integration works and best practices for developers.
 
+### Two Claude Review Systems
+
+Quantivly has two complementary Claude review systems that use the same [review standards](docs/review-standards.md):
+
+#### GitHub Actions (`@claude` comment)
+- **Purpose**: Formal PR validation before merge
+- **Trigger**: Comment `@claude` on any open PR
+- **Posting**: Automatic (posts review directly to PR)
+- **Cost**: Organization-paid (~$0.60-0.90 per review)
+- **Optimizations**: Prompt caching, retry logic, token metrics
+- **Use When**: PR is ready for formal review before requesting human review
+
+#### Local CLI (`review-pr` skill)
+- **Purpose**: Interactive development and feature planning
+- **Trigger**: Ask Claude to "review PR" in CLI session
+- **Posting**: User approval required before posting
+- **Cost**: Developer-paid (Claude Pro/Team subscription)
+- **Flexibility**: User control, interactive troubleshooting, iterative refinement
+- **Use When**: During development for early feedback or exploring design options
+
+**Both systems** reference the same review standards but are optimized for different contexts. Changes to review standards should be reflected in both.
+
 ### Overview
 
 **What**: Automated code reviews using Claude (Anthropic's AI) triggered by PR comments
