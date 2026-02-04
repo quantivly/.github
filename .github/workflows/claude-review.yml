@@ -30,11 +30,12 @@ permissions:
 
 jobs:
   claude-review:
-    # Only run on PR comments that mention "@claude" anywhere
+    # When triggered directly (issue_comment): check for @claude in comment
+    # When called as reusable workflow (workflow_call): caller already filtered, so run unconditionally
     # SECURITY NOTE: We check comment.body in the if condition, but never pass it to shell
     if: |
-      github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@claude')
+      github.event_name == 'workflow_call' ||
+      (github.event.issue.pull_request && contains(github.event.comment.body, '@claude'))
 
     runs-on: ubuntu-latest
     timeout-minutes: 10
