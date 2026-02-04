@@ -553,7 +553,7 @@ async def call_claude_with_mcp(
     dynamic_content: str,
     anthropic_key: str,
     linear_api_key: str | None,
-) -> tuple[str, Any, bool]:
+) -> tuple[str, Any, bool, int, dict[str, Any] | None]:
     """
     Call Claude API with Linear MCP tools available and prompt caching.
 
@@ -571,7 +571,12 @@ async def call_claude_with_mcp(
     - Cache automatically refreshes on each use (free)
 
     Returns:
-        Tuple of (review_text, final_response, had_linear_context) for metrics logging
+        Tuple of (review_text, final_response, had_linear_context, tool_call_count, linear_issue_data)
+            - review_text: The generated review content
+            - final_response: The Anthropic API response object (for metrics)
+            - had_linear_context: Whether Linear tools were available
+            - tool_call_count: Number of tool calls made during review
+            - linear_issue_data: Linear issue details if fetched (dict with id, title, state)
     """
     # Prepare content blocks with caching
     initial_content = [
@@ -603,7 +608,7 @@ async def call_claude_with_mcp(
             print(f"⚡ Cache hit: {message.usage.cache_read_input_tokens} tokens")
 
         review_text = strip_tool_simulation_markup(message.content[0].text)
-        return review_text, message, False  # No Linear context available
+        return review_text, message, False, 0, None  # No Linear context available
 
     # Check if HTTP client is available
     if streamablehttp_client is None:
@@ -617,7 +622,7 @@ async def call_claude_with_mcp(
             messages=[{"role": "user", "content": initial_content}],
         )
         review_text = strip_tool_simulation_markup(message.content[0].text)
-        return review_text, message, False
+        return review_text, message, False, 0, None
 
     # Connect to Linear's official hosted MCP server
     linear_mcp_url = "https://mcp.linear.app/mcp"
@@ -644,6 +649,10 @@ async def call_claude_with_mcp(
 
                 # Start conversation with cached content
                 messages = [{"role": "user", "content": initial_content}]
+
+                # Track tool usage and Linear issue data for metrics
+                tool_call_count = 0
+                linear_issue_data: dict[str, Any] | None = None
 
                 # Conversation loop to handle tool use
                 iteration = 0
@@ -684,7 +693,8 @@ async def call_claude_with_mcp(
                                 review_text += block.text
                         review_text = strip_tool_simulation_markup(review_text)
                         print("✓ Review completed")
-                        return review_text, response, True  # Had Linear context via MCP
+                        print(f"📊 Total tool calls: {tool_call_count}")
+                        return review_text, response, True, tool_call_count, linear_issue_data
 
                     # Handle tool use
                     if response.stop_reason == "tool_use":
@@ -696,11 +706,29 @@ async def call_claude_with_mcp(
                         for block in response.content:
                             if block.type == "tool_use":
                                 print(f"🔧 Executing tool: {block.name}")
+                                tool_call_count += 1  # Track tool usage
 
                                 # Call the tool via MCP
                                 try:
                                     result = await session.call_tool(block.name, block.input)
                                     print(f"✓ Tool {block.name} executed successfully")
+
+                                    # Capture Linear issue data if this is get_issue
+                                    if block.name == "get_issue" and linear_issue_data is None:
+                                        try:
+                                            # Parse the result to extract issue details
+                                            import json
+                                            issue_content = result.content[0].text if result.content else "{}"
+                                            issue_json = json.loads(issue_content)
+                                            linear_issue_data = {
+                                                "id": issue_json.get("identifier", ""),
+                                                "title": issue_json.get("title", ""),
+                                                "state": issue_json.get("state", {}).get("name", ""),
+                                                "description": (issue_json.get("description", "") or "")[:200],  # First 200 chars
+                                            }
+                                            print(f"📋 Captured Linear issue: {linear_issue_data['id']} - {linear_issue_data['title']}")
+                                        except (json.JSONDecodeError, KeyError, IndexError, AttributeError) as e:
+                                            print(f"⚠️  Could not parse Linear issue data: {e}")
 
                                     tool_results.append({
                                         "type": "tool_result",
@@ -733,12 +761,14 @@ async def call_claude_with_mcp(
                         review_text,
                         response,
                         True,  # Had Linear context (even if unexpected stop)
+                        tool_call_count,
+                        linear_issue_data,
                     )
 
                 # Max iterations reached
                 print("⚠️  Max iterations reached in conversation loop")
                 # Return last response for metrics
-                return "Review incomplete: maximum conversation turns exceeded", response, True
+                return "Review incomplete: maximum conversation turns exceeded", response, True, tool_call_count, linear_issue_data
 
     except (asyncio.TimeoutError, ConnectionError, FileNotFoundError, OSError) as e:
         # MCP connection failures (timeout, server not found, connection issues)
@@ -760,10 +790,10 @@ async def call_claude_with_mcp(
                 print(f"⚡ Cache hit: {cache_hit} tokens")
 
         review_text = strip_tool_simulation_markup(message.content[0].text)
-        return review_text, message, False  # No Linear context (fallback)
+        return review_text, message, False, 0, None  # No Linear context (fallback)
 
 
-def log_token_metrics(response: Any, pr_number: int) -> None:
+def log_token_metrics(response: Any, pr_number: int, tool_call_count: int = 0) -> None:
     """
     Log detailed token usage for cost analysis and budget tracking.
 
@@ -817,16 +847,22 @@ def log_token_metrics(response: Any, pr_number: int) -> None:
                     f.write(
                         f"| Cache hit | {cache_hit:,} | -${cache_savings:.4f} (saved) |\n"
                     )
-                f.write(f"| **Total** | **{input_tokens + output_tokens:,}** | **${total_cost:.4f}** |\n\n")
+                f.write(f"| **Total** | **{input_tokens + output_tokens:,}** | **${total_cost:.4f}** |\n")
 
-                # Budget alert
+                # Add tool usage if applicable
+                if tool_call_count > 0:
+                    f.write(f"| Linear queries | {tool_call_count} | - |\n")
+                f.write("\n")
+
+                # Budget alert and performance notes
                 if total_cost > 0.10:
                     f.write(
                         f"⚠️ **Cost Alert**: Review exceeded $0.10 budget (${total_cost:.4f})\n\n"
                     )
                 elif cache_hit > 0:
+                    cache_pct = int((cache_savings / (input_cost + cache_savings)) * 100) if (input_cost + cache_savings) > 0 else 0
                     f.write(
-                        f"⚡ **Cache Performance**: Saved ${cache_savings:.4f} using prompt caching\n\n"
+                        f"⚡ **Cache Performance**: Saved ${cache_savings:.4f} ({cache_pct}% cost reduction)\n\n"
                     )
         except Exception as e:
             print(f"⚠️  Failed to write metrics to GitHub summary: {e}")
@@ -839,8 +875,10 @@ def post_review_comment(
     review_text: str,
     commenter: str,
     had_linear_context: bool = True,
+    tool_call_count: int = 0,
+    linear_issue_data: dict[str, Any] | None = None,
 ) -> None:
-    """Post formatted review comment to PR with Linear context status."""
+    """Post formatted review comment to PR with Linear context status and metrics."""
     repo = github.get_repo(repo_full_name)
     pr = repo.get_pull(pr_number)
 
@@ -848,6 +886,22 @@ def post_review_comment(
     comment_body = f"""## 🤖 Claude Code Review
 
 {review_text}
+
+---
+"""
+
+    # Add Linear context section if available
+    if linear_issue_data:
+        description_preview = linear_issue_data.get("description", "")
+        if len(description_preview) > 150:
+            description_preview = description_preview[:150] + "..."
+
+        comment_body += f"""### 📋 Linear Context
+
+**Issue**: [{linear_issue_data.get('id', 'Unknown')}](https://linear.app/quantivly/issue/{linear_issue_data.get('id', '').lower()})
+**Title**: {linear_issue_data.get('title', 'N/A')}
+**Status**: {linear_issue_data.get('state', 'Unknown')}
+{f'**Description**: {description_preview}' if description_preview else ''}
 
 ---
 """
@@ -866,7 +920,13 @@ def post_review_comment(
 ---
 """
 
-    comment_body += f"""<sub>Triggered by @{commenter} | Powered by Claude Sonnet 4.5 with Linear MCP | [Learn more](https://github.com/quantivly/.github/blob/master/docs/claude-integration-guide.md)</sub>
+    # Build footer with tool usage if applicable
+    footer_parts = [f"Triggered by @{commenter}", "Powered by Claude Sonnet 4.5 with Linear MCP"]
+    if tool_call_count > 0:
+        footer_parts.append(f"Validated using {tool_call_count} Linear {'query' if tool_call_count == 1 else 'queries'}")
+    footer_parts.append("[Learn more](https://github.com/quantivly/.github/blob/master/docs/claude-integration-guide.md)")
+
+    comment_body += f"""<sub>{' | '.join(footer_parts)}</sub>
 """
 
     try:
@@ -951,16 +1011,17 @@ async def async_main(args: argparse.Namespace) -> int:
         )
 
         # Call Claude API with MCP integration and prompt caching
-        review_text, final_response, had_linear_context = await call_claude_with_mcp(
+        review_text, final_response, had_linear_context, tool_call_count, linear_issue_data = await call_claude_with_mcp(
             static_content, dynamic_content, anthropic_key, linear_key
         )
 
         # Log token usage and cost metrics
-        log_token_metrics(final_response, args.pr_number)
+        log_token_metrics(final_response, args.pr_number, tool_call_count)
 
-        # Post review comment with Linear context status
+        # Post review comment with Linear context status and metrics
         post_review_comment(
-            github, repo_full_name, args.pr_number, review_text, args.commenter, had_linear_context
+            github, repo_full_name, args.pr_number, review_text, args.commenter,
+            had_linear_context, tool_call_count, linear_issue_data
         )
 
         print("✅ Review completed successfully")
