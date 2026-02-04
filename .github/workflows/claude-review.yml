@@ -110,7 +110,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install \
-            "anthropic==1.64.0" \
+            "anthropic>=0.77.0" \
             "pygithub==2.4.0" \
             "requests==2.32.0" \
             "mcp==1.0.0"
