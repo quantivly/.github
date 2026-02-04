@@ -199,6 +199,137 @@ git commit -m "doc: Add organization security policy"
 git push origin master
 ```
 
+## Claude + GitHub Integration
+
+Quantivly uses automated Claude-powered code reviews for pull requests. This section describes how the integration works and best practices for developers.
+
+### Overview
+
+**What**: Automated code reviews using Claude (Anthropic's AI) triggered by PR comments
+
+**Why**: Catch security vulnerabilities, logic errors, and code quality issues before human review
+
+**When**: Manually triggered by commenting `@claude` on any open pull request
+
+**Who**: Available to organization members and repository collaborators with write access
+
+### How to Use
+
+1. **Create PR with Linear ID in title**:
+   ```
+   HUB-1234 Add CSV export feature
+   ```
+
+2. **Comment on PR to trigger review**:
+   ```
+   @claude
+   ```
+   or
+   ```
+   @claude review
+   ```
+
+3. **Wait 2-5 minutes** for review to complete
+
+4. **Address feedback**:
+   - Fix **CRITICAL** issues (security, data loss)
+   - Fix **HIGH** issues (bugs, logic errors)
+   - Consider **Suggestions** (use judgment)
+
+5. **Request human review** after addressing critical feedback
+
+### What Claude Reviews
+
+**Priority order**:
+1. **Security** - OWASP Top 10, HIPAA compliance, SQL injection, XSS, credentials
+2. **Logic Errors** - Incorrect implementations, edge cases, race conditions
+3. **Code Quality** - Readability, complexity, DRY, SOLID, conventions
+4. **Testing** - Coverage, edge cases, test quality, framework conventions
+5. **Performance** - Algorithmic efficiency, N+1 queries, memory leaks, caching
+
+### Linear Integration
+
+When PR title includes Linear issue ID (format: `AAA-####`), Claude:
+- Fetches issue description and acceptance criteria
+- Validates PR alignment with requirements
+- References specific issue requirements in feedback
+- Provides context-aware suggestions
+
+**Note**: GitHub-Linear integration automatically notifies Linear issue when review is posted.
+
+### Best Practices
+
+1. **Review BEFORE human review** - Catch issues early, save reviewer time
+2. **Address CRITICAL first** - Security and data loss issues must be fixed
+3. **Re-review after significant changes** - Comment `@claude` again if substantial fixes made
+4. **Don't ignore security findings** - Healthcare data requires extra caution
+5. **Use for learning** - Claude explains WHY, not just WHAT
+
+### Implementation Details
+
+**Workflow**: `.github/workflows/claude-review.yml`
+- Triggers on `issue_comment` event with `@claude` pattern
+- Validates commenter permissions (org member or collaborator)
+- Calls Python orchestration script
+
+**Script**: `scripts/claude-review.py`
+- Fetches PR context via GitHub API
+- Fetches Linear context via GraphQL API (read-only)
+- Reads repository CLAUDE.md for guidelines
+- Calls Claude API (Sonnet 4.5)
+- Posts structured review as PR comment
+
+**Cost**: ~$0.50-$1.00 per review (covered by organization)
+
+**Security**: All API keys stored in organization secrets, passed via environment variables
+
+### Local Development with MCP
+
+Developers can optionally use Claude Code CLI with Linear MCP integration for feature implementation:
+
+```bash
+# Configure Linear MCP in ~/.config/claude/mcp.json
+{
+  "mcpServers": {
+    "linear": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-linear"],
+      "env": {
+        "LINEAR_API_KEY": "lin_api_YOUR_KEY"
+      }
+    }
+  }
+}
+
+# Use Claude Code with Linear context
+cd ~/hub/sre-core
+claude
+> "Implement feature from HUB-1234"
+```
+
+### Troubleshooting
+
+**Review not triggering**:
+- Check comment is exactly `@claude` or `@claude review`
+- Verify you're an org member or collaborator
+- Check PR is open (not draft or closed)
+
+**Review failed**:
+- Check [Actions tab](https://github.com/quantivly/<repo>/actions) for logs
+- Common causes: API rate limits, timeouts
+- Solution: Wait and retry with `@claude`
+
+**Linear context missing**:
+- Verify PR title starts with `AAA-####` format
+- Check issue exists and is accessible in Linear
+- Review continues without Linear context if not found
+
+### Related Documentation
+
+- [Detailed Integration Guide](docs/claude-integration-guide.md) - Complete usage guide
+- [GitHub Actions Docs](https://docs.github.com/en/actions) - Workflow reference
+- [Linear API](https://developers.linear.app/) - API documentation
+
 ## Development Standards
 
 ### Profile README Guidelines

@@ -1,0 +1,179 @@
+name: Claude PR Review
+
+on:
+  issue_comment:
+    types: [created]
+
+# Ensure only one review runs per PR at a time
+concurrency:
+  group: claude-review-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  claude-review:
+    # Only run on PR comments that match "@claude" or "@claude review"
+    # SECURITY NOTE: We check comment.body in the if condition, but never pass it to shell
+    if: |
+      github.event.issue.pull_request &&
+      (github.event.comment.body == '@claude' ||
+       github.event.comment.body == '@claude review' ||
+       startsWith(github.event.comment.body, '@claude ') ||
+       startsWith(github.event.comment.body, '@claude review '))
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate commenter is org member
+        id: validate
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              // Check if commenter is org member or repo collaborator
+              // SECURITY: All data here is handled by GitHub Actions script, not shell
+              const commenter = context.payload.comment.user.login;
+              const repo = context.repo;
+
+              // Try org membership first
+              try {
+                await github.rest.orgs.checkMembershipForUser({
+                  org: repo.owner,
+                  username: commenter,
+                });
+                console.log(`✓ ${commenter} is organization member`);
+                return true;
+              } catch (orgError) {
+                // Not an org member, check if repo collaborator
+                const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  username: commenter,
+                });
+
+                if (['write', 'admin', 'maintain'].includes(permission.permission)) {
+                  console.log(`✓ ${commenter} is repository collaborator with ${permission.permission} access`);
+                  return true;
+                }
+
+                console.log(`✗ ${commenter} does not have sufficient permissions`);
+                return false;
+              }
+            } catch (error) {
+              console.error('Permission check failed:', error);
+              return false;
+            }
+
+      - name: Post permission denied message
+        if: steps.validate.outputs.result == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ Claude reviews are only available to organization members and repository collaborators with write access.'
+            });
+
+      - name: Exit if permission denied
+        if: steps.validate.outputs.result == 'false'
+        run: exit 0
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for diff analysis
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install anthropic pygithub requests mcp
+
+      - name: Post review started message
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '🤖 Claude review started... This typically takes 2-5 minutes.\n\n_Analyzing code for security, logic errors, code quality, testing, and performance._\n\n_Claude has access to Linear for requirement validation._'
+            });
+
+      - name: Run Claude review
+        id: review
+        env:
+          # SECURITY: All untrusted data passed via environment variables, never direct shell substitution
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          # SECURITY: Using environment variables with proper quoting
+          # No direct interpolation of GitHub event data
+          python scripts/claude-review.py \
+            --pr-number "$PR_NUMBER" \
+            --repo-owner "$REPO_OWNER" \
+            --repo-name "$REPO_NAME" \
+            --comment-id "$COMMENT_ID" \
+            --commenter "$COMMENTER"
+
+      - name: Post error message on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const errorMessage = `❌ Claude review failed
+
+            The review encountered an error. This could be due to:
+            - API rate limits or timeouts
+            - Invalid PR state
+            - Configuration issues
+
+            Please check the [workflow run logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+            You can try again by commenting \`@claude\` on this PR.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: errorMessage
+            });
+
+      - name: Report usage metrics
+        if: always()
+        run: |
+          # SECURITY: Using only trusted data in GITHUB_STEP_SUMMARY
+          # All variables here are from GitHub's context, not user input
+          echo "### Claude Review Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- PR: #${{ github.event.issue.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Repository: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: @${{ github.event.comment.user.login }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Workflow run: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
