@@ -1,0 +1,29 @@
+name: Claude PR Review
+
+on:
+  issue_comment:
+    types: [created]
+
+# Ensure only one review runs per PR at a time
+concurrency:
+  group: claude-review-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  claude-review:
+    # Only run on PR comments that match "@claude" or "@claude review"
+    if: |
+      github.event.issue.pull_request &&
+      (github.event.comment.body == '@claude' ||
+       github.event.comment.body == '@claude review' ||
+       startsWith(github.event.comment.body, '@claude ') ||
+       startsWith(github.event.comment.body, '@claude review '))
+
+    # Call the centralized reusable workflow from the .github organization repository
+    uses: quantivly/.github/.github/workflows/claude-review.yml@master
+    secrets: inherit  # Pass all organization secrets to the reusable workflow

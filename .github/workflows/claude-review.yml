@@ -1,8 +1,22 @@
 name: Claude PR Review
 
 on:
+  # Direct trigger for PRs in this (.github) repository
   issue_comment:
     types: [created]
+
+  # Reusable workflow trigger for other repositories in the organization
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+        description: Anthropic API key for Claude API access
+      LINEAR_API_KEY:
+        required: true
+        description: Linear API key for issue context retrieval
+      GITHUB_TOKEN:
+        required: false
+        description: GitHub token for API access (defaults to automatic token)
 
 # Ensure only one review runs per PR at a time
 concurrency:
