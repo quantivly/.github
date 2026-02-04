@@ -115,6 +115,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Set up Node.js for Linear MCP
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'  # LTS version for @modelcontextprotocol/server-linear
+
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
