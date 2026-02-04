@@ -339,8 +339,14 @@ Run: Automatically on PR push
 
 ### Implementation Details
 
+**Architecture**: Reusable workflow pattern
+- **Central workflow**: `quantivly/.github/.github/workflows/claude-review.yml`
+- **Caller workflows**: Minimal files in each repository's `.github/workflows/` directory
+- **Secrets**: Automatically inherited from organization secrets using `secrets: inherit`
+- **Deployment**: See [Deploying Claude Review](docs/deploying-claude-review.md)
+
 **Workflow**: `.github/workflows/claude-review.yml`
-- Triggers on `issue_comment` event with `@claude` pattern
+- Triggers on `issue_comment` event with `@claude` pattern (direct) or `workflow_call` (reusable)
 - Validates commenter permissions (org member or collaborator)
 - Calls Python orchestration script
 
@@ -354,6 +360,23 @@ Run: Automatically on PR push
 **Cost**: ~$0.50-$1.00 per review (covered by organization)
 
 **Security**: All API keys stored in organization secrets, passed via environment variables
+
+**Deploying to New Repositories**:
+
+To enable Claude reviews in a repository, add this minimal caller workflow:
+
+```bash
+# Copy template to repository
+cp ~/quantivly/.github/workflow-templates/claude-review-caller.yml \
+   <repo>/.github/workflows/claude-review.yml
+
+# Commit and push
+git add .github/workflows/claude-review.yml
+git commit -m "enh: Add Claude-powered PR review workflow"
+git push origin master
+```
+
+See [docs/deploying-claude-review.md](docs/deploying-claude-review.md) for complete deployment guide.
 
 ### Local Development with MCP
 
