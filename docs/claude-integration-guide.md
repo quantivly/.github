@@ -75,6 +75,50 @@ Claude's review will have these sections:
 
 ---
 
+## When to Use Local Claude Code CLI vs GitHub Actions
+
+### Use Local Claude Code CLI During Development
+
+**Command**: `claude` in terminal
+
+**Best for**:
+- Planning feature implementation (brainstorming, architecture)
+- Real-time iteration with Linear context (fetch issue details, comments)
+- Exploring codebase patterns before writing code
+- Quick security checks on sensitive changes
+- Interactive debugging and problem-solving
+
+**Setup Required**:
+- Linear MCP configured in `~/.config/claude/mcp.json`
+- Anthropic API key configured
+
+**Cost**: Paid by individual developer (via Claude Pro/Team subscription)
+
+### Use GitHub Actions @claude During PR Review
+
+**Trigger**: Comment `@claude` on PR
+
+**Best for**:
+- Formal validation before human review
+- Security audit before merge
+- Comprehensive multi-dimensional review
+- Linear requirement alignment verification
+- Team-wide standardized feedback
+
+**Setup Required**: None (automatic for organization members)
+
+**Cost**: Paid by organization (~$0.50-1.00 per review)
+
+### Recommended Workflow
+
+1. **Implementation Phase**: Use local CLI for guidance and iteration
+2. **PR Creation**: Push code to GitHub
+3. **Self-Review**: Comment `@claude` to get automated feedback
+4. **Address Issues**: Fix CRITICAL and HIGH severity findings
+5. **Human Review**: Request review from team members
+
+---
+
 ## What Claude Reviews
 
 ### 1. Security (Highest Priority)

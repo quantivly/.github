@@ -265,6 +265,56 @@ When PR title includes Linear issue ID (format: `AAA-####`), Claude:
 4. **Don't ignore security findings** - Healthcare data requires extra caution
 5. **Use for learning** - Claude explains WHY, not just WHAT
 
+### Tool Allocation
+
+Quantivly uses multiple code quality tools. Here's what each tool owns:
+
+#### Pre-Commit Hooks (Local, Before Push)
+
+Run: `pre-commit run --all-files`
+
+**Responsibilities**:
+- **ruff**: Linting, import sorting, basic security patterns (S101-S603)
+- **ruff-format** or **black**: Code formatting (PEP 8)
+- **mypy**: Type hint completeness and correctness
+
+**When to run**: Before every commit (automatic if configured)
+
+#### Claude Code Review (GitHub Actions, @claude)
+
+Trigger: Comment `@claude` on PR
+
+**Responsibilities**:
+- **Security**: OWASP Top 10, SQL injection, XSS, credentials, authentication
+- **Logic Errors**: Correctness, edge cases, off-by-one, race conditions
+- **Code Quality**: Design patterns, SOLID, maintainability, complexity
+- **Testing**: Coverage adequacy, edge case testing, test quality
+- **Performance**: N+1 queries, algorithmic efficiency, caching opportunities
+- **Linear Alignment**: PR vs. issue requirements validation
+
+**When to run**: After PR creation, before requesting human review
+
+#### CI/CD Pipeline (pytest, coverage)
+
+Run: Automatically on PR push
+
+**Responsibilities**:
+- **Unit Tests**: Individual function correctness
+- **Integration Tests**: Component interaction
+- **Coverage**: Threshold enforcement (80%+ for critical paths)
+
+**Result**: Blocking if tests fail or coverage drops
+
+#### Decision Matrix: When to Use Each
+
+| Scenario | Tool |
+|----------|------|
+| "I'm about to commit changes" | Pre-commit hooks |
+| "I want feedback during feature development" | Local Claude Code CLI (`claude` command) |
+| "PR is ready for formal review" | GitHub Actions (`@claude` comment) |
+| "I need to verify tests pass" | CI/CD pipeline (automatic) |
+| "I want to explore Linear issue context" | Local Claude Code CLI with Linear MCP |
+
 ### Implementation Details
 
 **Workflow**: `.github/workflows/claude-review.yml`

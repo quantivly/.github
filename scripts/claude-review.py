@@ -38,7 +38,7 @@ from mcp.client.stdio import stdio_client
 MAX_DIFF_LINES = 2000  # Limit diff size to control token usage
 MAX_FILE_CONTENT_LINES = 500  # Limit individual file content
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
-MAX_TOKENS = 8000
+MAX_TOKENS = 5000
 
 
 def extract_linear_id(pr_title: str) -> str | None:
@@ -274,7 +274,7 @@ async def call_claude_with_mcp(
     dynamic_content: str,
     anthropic_key: str,
     linear_api_key: str | None,
-) -> tuple[str, Any]:
+) -> tuple[str, Any, bool]:
     """
     Call Claude API with Linear MCP tools available and prompt caching.
 
@@ -292,7 +292,7 @@ async def call_claude_with_mcp(
     - Cache automatically refreshes on each use (free)
 
     Returns:
-        Tuple of (review_text, final_response) for metrics logging
+        Tuple of (review_text, final_response, had_linear_context) for metrics logging
     """
     # Prepare content blocks with caching
     initial_content = [
@@ -323,7 +323,7 @@ async def call_claude_with_mcp(
         if hasattr(message.usage, "cache_read_input_tokens"):
             print(f"⚡ Cache hit: {message.usage.cache_read_input_tokens} tokens")
 
-        return message.content[0].text, message
+        return message.content[0].text, message, False  # No Linear context available
 
     # Set up MCP server parameters
     server_params = StdioServerParameters(
@@ -390,7 +390,7 @@ async def call_claude_with_mcp(
                             if hasattr(block, "text"):
                                 review_text += block.text
                         print("✓ Review completed")
-                        return review_text, response
+                        return review_text, response, True  # Had Linear context via MCP
 
                     # Handle tool use
                     if response.stop_reason == "tool_use":
@@ -413,7 +413,8 @@ async def call_claude_with_mcp(
                                         "tool_use_id": block.id,
                                         "content": result.content,
                                     })
-                                except Exception as e:
+                                except (asyncio.TimeoutError, OSError, RuntimeError) as e:
+                                    # MCP tool execution failures (connection, timeout, runtime errors)
                                     print(f"⚠️  Tool {block.name} failed: {e}")
                                     tool_results.append({
                                         "type": "tool_result",
@@ -436,14 +437,16 @@ async def call_claude_with_mcp(
                     return (
                         review_text or "Review completed with unexpected stop reason",
                         response,
+                        True,  # Had Linear context (even if unexpected stop)
                     )
 
                 # Max iterations reached
                 print("⚠️  Max iterations reached in conversation loop")
                 # Return last response for metrics
-                return "Review incomplete: maximum conversation turns exceeded", response
+                return "Review incomplete: maximum conversation turns exceeded", response, True
 
-    except Exception as e:
+    except (asyncio.TimeoutError, ConnectionError, FileNotFoundError, OSError) as e:
+        # MCP connection failures (timeout, server not found, connection issues)
         print(f"❌ MCP integration error: {e}")
         print("⚠️  Falling back to review without Linear tools")
 
@@ -461,7 +464,7 @@ async def call_claude_with_mcp(
             if cache_hit > 0:
                 print(f"⚡ Cache hit: {cache_hit} tokens")
 
-        return message.content[0].text, message
+        return message.content[0].text, message, False  # No Linear context (fallback)
 
 
 def log_token_metrics(response: Any, pr_number: int) -> None:
@@ -539,8 +542,9 @@ def post_review_comment(
     pr_number: int,
     review_text: str,
     commenter: str,
+    had_linear_context: bool = True,
 ) -> None:
-    """Post formatted review comment to PR."""
+    """Post formatted review comment to PR with Linear context status."""
     repo = github.get_repo(repo_full_name)
     pr = repo.get_pull(pr_number)
 
@@ -550,7 +554,23 @@ def post_review_comment(
 {review_text}
 
 ---
-<sub>Triggered by @{commenter} | Powered by Claude Sonnet 4.5 with Linear MCP | [Learn more](https://github.com/quantivly/.github/blob/master/docs/claude-integration-guide.md)</sub>
+"""
+
+    # Add Linear context warning if not available
+    if not had_linear_context:
+        comment_body += """⚠️ **Linear Context**: Unable to fetch Linear issue context. Review performed without requirement validation.
+
+**Possible reasons**:
+- PR title doesn't include Linear ID (format: `AAA-#### Description`)
+- Linear MCP server unavailable
+- Issue doesn't exist or is inaccessible
+
+**Recommendation**: Verify PR title format and ensure Linear issue is linked.
+
+---
+"""
+
+    comment_body += f"""<sub>Triggered by @{commenter} | Powered by Claude Sonnet 4.5 with Linear MCP | [Learn more](https://github.com/quantivly/.github/blob/master/docs/claude-integration-guide.md)</sub>
 """
 
     try:
@@ -602,10 +622,10 @@ async def async_main(args: argparse.Namespace) -> int:
 
         # Fetch PR diff
         print("📥 Fetching PR diff...")
-        files = pr.get_files()
+        files = pr.get_files()  # PyGithub PaginatedList - iteration auto-paginates
         diff_parts = []
 
-        for file in files:
+        for file in files:  # Iterating handles pagination automatically (all pages fetched)
             if file.patch:
                 patch = file.patch
                 # Truncate very large diffs per file
@@ -624,16 +644,16 @@ async def async_main(args: argparse.Namespace) -> int:
         )
 
         # Call Claude API with MCP integration and prompt caching
-        review_text, final_response = await call_claude_with_mcp(
+        review_text, final_response, had_linear_context = await call_claude_with_mcp(
             static_content, dynamic_content, anthropic_key, linear_key
         )
 
         # Log token usage and cost metrics
         log_token_metrics(final_response, args.pr_number)
 
-        # Post review comment
+        # Post review comment with Linear context status
         post_review_comment(
-            github, repo_full_name, args.pr_number, review_text, args.commenter
+            github, repo_full_name, args.pr_number, review_text, args.commenter, had_linear_context
         )
 
         print("✅ Review completed successfully")
