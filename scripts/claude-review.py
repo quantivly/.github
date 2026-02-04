@@ -597,10 +597,15 @@ async def call_claude_with_mcp(
         return review_text, message, False  # No Linear context available
 
     # Set up MCP server parameters
+    # IMPORTANT: Must inherit current environment (especially PATH) for npx to work
+    # Only override LINEAR_API_KEY for the MCP server
+    mcp_env = os.environ.copy()
+    mcp_env["LINEAR_API_KEY"] = linear_api_key
+
     server_params = StdioServerParameters(
         command="npx",
         args=["-y", "@modelcontextprotocol/server-linear"],
-        env={"LINEAR_API_KEY": linear_api_key},
+        env=mcp_env,
     )
 
     print("🔗 Connecting to Linear MCP server...")
