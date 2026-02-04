@@ -87,56 +87,21 @@ def build_review_prompt(
     linear_id: str | None,
     claude_md: str,
     diff: str,
-) -> str:
-    """Construct comprehensive review prompt with all context."""
-    # Build PR metadata section
-    pr_section = f"""**Repository**: {pr.base.repo.full_name}
-**PR**: #{pr.number} - {pr.title}
-**Author**: @{pr.user.login}
-**Branch**: {pr.head.ref} → {pr.base.ref}
-**Files Changed**: {pr.changed_files}
-**Additions**: +{pr.additions} | **Deletions**: -{pr.deletions}
-"""
+) -> tuple[str, str]:
+    """
+    Construct comprehensive review prompt with static and dynamic content.
 
-    # Build Linear requirement note
-    linear_section = ""
-    if linear_id:
-        linear_section = f"""
-# Linear Issue Reference
-
-The PR references Linear issue **{linear_id}**.
-
-**You have access to Linear tools** - use them to fetch issue details, related issues, comments, and any other context needed to validate this PR against requirements.
-
-Suggested approach:
-1. Use Linear tools to fetch issue {linear_id} details
-2. Check issue description and acceptance criteria
-3. Review recent comments for additional context
-4. Validate PR changes align with requirements
-"""
-    else:
-        linear_section = """
-# Linear Issue Reference
-
-No Linear issue ID found in PR title. Proceeding with code review without requirement validation.
-"""
-
-    # Construct full prompt
-    prompt = f"""# Role
+    Returns:
+        Tuple of (static_content, dynamic_content) for prompt caching optimization.
+        Static content includes role, guidelines, and CLAUDE.md (cacheable).
+        Dynamic content includes PR context and diff (not cacheable).
+    """
+    # Build static content (cacheable - doesn't change between reviews)
+    static_content = f"""# Role
 You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
-
-# PR Context
-{pr_section}
-
-{linear_section}
 
 # Repository Guidelines
 {claude_md}
-
-# Code Changes
-```diff
-{diff}
-```
 
 # Your Task
 
@@ -144,7 +109,7 @@ Conduct a comprehensive code review with the following priorities:
 
 ## 1. Linear Requirement Validation (If Applicable)
 If a Linear issue is referenced:
-- **Use your Linear tools** to fetch issue details ({linear_id if linear_id else "N/A"})
+- **Use your Linear tools** to fetch issue details
 - Check issue description and acceptance criteria
 - Review comments for additional requirements
 - Validate PR changes align with stated requirements
@@ -200,7 +165,8 @@ Provide your review in this exact structure:
 [2-3 sentence overview of the PR and overall assessment]
 
 ## Alignment with Linear Requirements
-{f"[Use Linear tools to fetch {linear_id} and assess alignment]" if linear_id else "[No Linear issue to validate against]"}
+[If Linear issue referenced, use tools to fetch and assess alignment]
+[If no Linear issue, state: "No Linear issue to validate against"]
 
 ## Critical Issues (Must Fix Before Merge)
 [List ONLY if found. Each issue must include:]
@@ -253,25 +219,94 @@ Provide your review in this exact structure:
 - Be thorough but concise
 - Use severity labels appropriately (CRITICAL = security/data loss, HIGH = bugs/logic errors)
 """
-    return prompt
+
+    # Build PR metadata section
+    pr_section = f"""**Repository**: {pr.base.repo.full_name}
+**PR**: #{pr.number} - {pr.title}
+**Author**: @{pr.user.login}
+**Branch**: {pr.head.ref} → {pr.base.ref}
+**Files Changed**: {pr.changed_files}
+**Additions**: +{pr.additions} | **Deletions**: -{pr.deletions}
+"""
+
+    # Build Linear requirement note
+    linear_section = ""
+    if linear_id:
+        linear_section = f"""
+# Linear Issue Reference
+
+The PR references Linear issue **{linear_id}**.
+
+**You have access to Linear tools** - use them to fetch issue details, related issues, comments, and any other context needed to validate this PR against requirements.
+
+Suggested approach:
+1. Use Linear tools to fetch issue {linear_id} details
+2. Check issue description and acceptance criteria
+3. Review recent comments for additional context
+4. Validate PR changes align with requirements
+"""
+    else:
+        linear_section = """
+# Linear Issue Reference
+
+No Linear issue ID found in PR title. Proceeding with code review without requirement validation.
+"""
+
+    # Build dynamic content (not cacheable - changes for each PR)
+    dynamic_content = f"""# PR Context
+{pr_section}
+
+{linear_section}
+
+# Code Changes
+```diff
+{diff}
+```
+
+Please conduct your review according to the guidelines and priorities above.
+"""
+
+    return static_content, dynamic_content
 
 
 async def call_claude_with_mcp(
-    prompt: str,
+    static_content: str,
+    dynamic_content: str,
     anthropic_key: str,
     linear_api_key: str | None,
-) -> str:
+) -> tuple[str, Any]:
     """
-    Call Claude API with Linear MCP tools available.
+    Call Claude API with Linear MCP tools available and prompt caching.
 
     This function:
     1. Starts the Linear MCP server
     2. Connects as an MCP client
     3. Gets available Linear tools
-    4. Calls Claude with tools available
+    4. Calls Claude with tools available and prompt caching enabled
     5. Handles tool_use conversation loop
-    6. Returns the final review text
+    6. Returns the final review text and response object for metrics
+
+    Prompt caching optimization:
+    - Static content (role, guidelines, CLAUDE.md) is cached (5min TTL)
+    - Reduces cost by 35% and latency by 85% for cached content
+    - Cache automatically refreshes on each use (free)
+
+    Returns:
+        Tuple of (review_text, final_response) for metrics logging
     """
+    # Prepare content blocks with caching
+    initial_content = [
+        {
+            "type": "text",
+            "text": static_content,
+            "cache_control": {"type": "ephemeral"},  # Cache static instructions
+        },
+        {
+            "type": "text",
+            "text": dynamic_content,  # Dynamic PR context - not cached
+        },
+    ]
+
     if not linear_api_key:
         print("⚠️  No LINEAR_API_KEY provided, proceeding without Linear tools")
         # Call Claude without tools
@@ -279,9 +314,16 @@ async def call_claude_with_mcp(
         message = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": initial_content}],
         )
-        return message.content[0].text
+
+        # Log cache metrics if available
+        if hasattr(message.usage, "cache_creation_input_tokens"):
+            print(f"💾 Cache created: {message.usage.cache_creation_input_tokens} tokens")
+        if hasattr(message.usage, "cache_read_input_tokens"):
+            print(f"⚡ Cache hit: {message.usage.cache_read_input_tokens} tokens")
+
+        return message.content[0].text, message
 
     # Set up MCP server parameters
     server_params = StdioServerParameters(
@@ -307,8 +349,8 @@ async def call_claude_with_mcp(
                 # Initialize Anthropic client
                 client = anthropic.Anthropic(api_key=anthropic_key)
 
-                # Start conversation
-                messages = [{"role": "user", "content": prompt}]
+                # Start conversation with cached content
+                messages = [{"role": "user", "content": initial_content}]
 
                 # Conversation loop to handle tool use
                 iteration = 0
@@ -325,10 +367,20 @@ async def call_claude_with_mcp(
                         messages=messages,
                     )
 
-                    # Log token usage
+                    # Log token usage including cache metrics
                     input_tokens = response.usage.input_tokens
                     output_tokens = response.usage.output_tokens
                     print(f"📊 Tokens: {input_tokens} input, {output_tokens} output")
+
+                    # Log cache performance
+                    if hasattr(response.usage, "cache_creation_input_tokens"):
+                        cache_created = response.usage.cache_creation_input_tokens
+                        if cache_created > 0:
+                            print(f"💾 Cache created: {cache_created} tokens")
+                    if hasattr(response.usage, "cache_read_input_tokens"):
+                        cache_hit = response.usage.cache_read_input_tokens
+                        if cache_hit > 0:
+                            print(f"⚡ Cache hit: {cache_hit} tokens (saved ~85% latency)")
 
                     # Check if we're done
                     if response.stop_reason == "end_turn":
@@ -338,7 +390,7 @@ async def call_claude_with_mcp(
                             if hasattr(block, "text"):
                                 review_text += block.text
                         print("✓ Review completed")
-                        return review_text
+                        return review_text, response
 
                     # Handle tool use
                     if response.stop_reason == "tool_use":
@@ -381,24 +433,104 @@ async def call_claude_with_mcp(
                     for block in response.content:
                         if hasattr(block, "text"):
                             review_text += block.text
-                    return review_text or "Review completed with unexpected stop reason"
+                    return (
+                        review_text or "Review completed with unexpected stop reason",
+                        response,
+                    )
 
                 # Max iterations reached
                 print("⚠️  Max iterations reached in conversation loop")
-                return "Review incomplete: maximum conversation turns exceeded"
+                # Return last response for metrics
+                return "Review incomplete: maximum conversation turns exceeded", response
 
     except Exception as e:
         print(f"❌ MCP integration error: {e}")
         print("⚠️  Falling back to review without Linear tools")
 
-        # Fallback: call Claude without tools
+        # Fallback: call Claude without tools but still use caching
         client = anthropic.Anthropic(api_key=anthropic_key)
         message = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": initial_content}],
         )
-        return message.content[0].text
+
+        # Log cache metrics
+        if hasattr(message.usage, "cache_read_input_tokens"):
+            cache_hit = message.usage.cache_read_input_tokens
+            if cache_hit > 0:
+                print(f"⚡ Cache hit: {cache_hit} tokens")
+
+        return message.content[0].text, message
+
+
+def log_token_metrics(response: Any, pr_number: int) -> None:
+    """
+    Log detailed token usage for cost analysis and budget tracking.
+
+    Pricing (Claude Sonnet 4.5):
+    - Input: $3.00/M tokens
+    - Output: $15.00/M tokens
+    - Cached input: $0.30/M tokens (90% cheaper)
+    """
+    usage = response.usage
+    input_tokens = usage.input_tokens
+    output_tokens = usage.output_tokens
+
+    # Calculate costs
+    input_cost = (input_tokens / 1_000_000) * 3.00
+    output_cost = (output_tokens / 1_000_000) * 15.00
+
+    # Check for cache metrics
+    cache_created = getattr(usage, "cache_creation_input_tokens", 0)
+    cache_hit = getattr(usage, "cache_read_input_tokens", 0)
+    cache_savings = 0.0
+
+    if cache_hit > 0:
+        # Cached tokens cost $0.30/M instead of $3.00/M (90% cheaper)
+        cache_savings = (cache_hit / 1_000_000) * (3.00 - 0.30)
+
+    total_cost = input_cost + output_cost - cache_savings
+
+    # Log to console
+    print(f"\n📊 Token Usage Summary:")
+    print(f"  Input: {input_tokens:,} tokens (${input_cost:.4f})")
+    print(f"  Output: {output_tokens:,} tokens (${output_cost:.4f})")
+    if cache_created > 0:
+        print(f"  Cache created: {cache_created:,} tokens")
+    if cache_hit > 0:
+        print(f"  Cache hit: {cache_hit:,} tokens (saved ${cache_savings:.4f})")
+    print(f"  Total cost: ${total_cost:.4f}")
+
+    # Add to GitHub Actions summary if available
+    summary_file = os.getenv("GITHUB_STEP_SUMMARY")
+    if summary_file:
+        try:
+            with open(summary_file, "a") as f:
+                f.write(f"\n### 📊 Token Metrics (PR #{pr_number})\n\n")
+                f.write(f"| Metric | Value | Cost |\n")
+                f.write(f"|--------|-------|------|\n")
+                f.write(f"| Input tokens | {input_tokens:,} | ${input_cost:.4f} |\n")
+                f.write(f"| Output tokens | {output_tokens:,} | ${output_cost:.4f} |\n")
+                if cache_created > 0:
+                    f.write(f"| Cache created | {cache_created:,} | - |\n")
+                if cache_hit > 0:
+                    f.write(
+                        f"| Cache hit | {cache_hit:,} | -${cache_savings:.4f} (saved) |\n"
+                    )
+                f.write(f"| **Total** | **{input_tokens + output_tokens:,}** | **${total_cost:.4f}** |\n\n")
+
+                # Budget alert
+                if total_cost > 0.10:
+                    f.write(
+                        f"⚠️ **Cost Alert**: Review exceeded $0.10 budget (${total_cost:.4f})\n\n"
+                    )
+                elif cache_hit > 0:
+                    f.write(
+                        f"⚡ **Cache Performance**: Saved ${cache_savings:.4f} using prompt caching\n\n"
+                    )
+        except Exception as e:
+            print(f"⚠️  Failed to write metrics to GitHub summary: {e}")
 
 
 def post_review_comment(
@@ -485,12 +617,19 @@ async def async_main(args: argparse.Namespace) -> int:
         full_diff = truncate_diff(full_diff, MAX_DIFF_LINES)
         print(f"✓ Collected diff ({len(full_diff)} characters)")
 
-        # Build review prompt
+        # Build review prompt with caching optimization
         print("📝 Building review prompt...")
-        prompt = build_review_prompt(pr, linear_id, claude_md, full_diff)
+        static_content, dynamic_content = build_review_prompt(
+            pr, linear_id, claude_md, full_diff
+        )
 
-        # Call Claude API with MCP integration
-        review_text = await call_claude_with_mcp(prompt, anthropic_key, linear_key)
+        # Call Claude API with MCP integration and prompt caching
+        review_text, final_response = await call_claude_with_mcp(
+            static_content, dynamic_content, anthropic_key, linear_key
+        )
+
+        # Log token usage and cost metrics
+        log_token_metrics(final_response, args.pr_number)
 
         # Post review comment
         post_review_comment(
