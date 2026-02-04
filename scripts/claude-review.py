@@ -82,6 +82,39 @@ def convert_mcp_tools_to_anthropic_format(mcp_tools: list[Any]) -> list[dict[str
     return anthropic_tools
 
 
+def strip_tool_simulation_markup(text: str) -> str:
+    """
+    Remove Claude's simulated tool usage markup from review text.
+
+    When Linear tools are unavailable but Claude is still instructed to use them,
+    it may simulate tool usage with XML-like tags. This function removes those tags
+    to ensure clean markdown output.
+
+    Examples of patterns removed:
+    - <tool_name attr="value">content</tool_name>
+    - <linear_fetch_issue ...>...</linear_fetch_issue>
+    - Self-closing tags: <tag attr="value" />
+    """
+    # Remove XML-like tool tags (both paired and self-closing)
+    # Pattern matches: <tag ...>content</tag> or <tag ... />
+    cleaned = re.sub(
+        r'<\w+[^>]*>.*?</\w+>',  # Paired tags with content
+        '',
+        text,
+        flags=re.DOTALL
+    )
+    cleaned = re.sub(
+        r'<\w+[^>]*/>\s*',  # Self-closing tags
+        '',
+        cleaned
+    )
+
+    # Clean up excessive whitespace left behind
+    cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned)
+
+    return cleaned.strip()
+
+
 def detect_tech_stack(files: list[Any]) -> str:
     """
     Detect primary tech stack from changed files.
@@ -249,6 +282,7 @@ def build_review_prompt(
     linear_id: str | None,
     claude_md: str,
     diff: str,
+    has_linear_tools: bool = False,
 ) -> tuple[str, str]:
     """
     Construct comprehensive review prompt with static and dynamic content.
@@ -272,6 +306,50 @@ def build_review_prompt(
     if standards_path.exists():
         review_standards = standards_path.read_text()
         print("✓ Loaded shared review standards")
+
+    # Build conditional Linear instructions based on tool availability
+    if has_linear_tools and linear_id:
+        linear_instructions = """If a Linear issue is referenced:
+- **Use your Linear tools** to fetch issue details
+- Check issue description and acceptance criteria
+- Review comments for additional requirements
+- Validate PR changes align with stated requirements
+- Check for related issues that might provide context
+
+### Linear Issue Quality Assessment (Advisory)
+When you fetch a Linear issue, also assess its quality and provide **advisory feedback** (not blocking):
+
+**Check for**:
+- Clear, measurable acceptance criteria
+- Technical specifications (API contracts, data models, error handling)
+- Edge cases documented
+- Security/compliance requirements mentioned
+- Performance requirements specified
+
+**If issue quality is poor**, include this in your "Alignment with Linear Requirements" section:
+```
+⚠️ **Linear Issue Quality**: This issue could be improved with:
+- Specific acceptance criteria (e.g., "handles 10K records", "loads in <2s")
+- Edge case documentation (empty states, error scenarios)
+- Security requirements (authentication, data validation)
+
+This is advisory only - the review proceeds based on what IS documented.
+```
+
+**Note**: This helps improve issue quality over time for better requirement validation in future PRs."""
+        linear_usage_guideline = "- **Use Linear tools first** if an issue is referenced - get full context before reviewing code\n"
+    else:
+        linear_instructions = """Linear tools are not available for this review.
+
+**IMPORTANT**: Do NOT simulate tool usage or include tool markup (like `<tool_name>...</tool_name>`) in your response.
+
+Review based on:
+- PR description and code changes
+- Repository guidelines (CLAUDE.md)
+- General best practices
+
+If a Linear issue is mentioned in the PR title, note its ID but proceed without fetching details."""
+        linear_usage_guideline = ""
 
     # Build static content (cacheable - doesn't change between reviews)
     static_content = f"""# Role
@@ -306,34 +384,7 @@ Conduct a comprehensive code review with the following priorities:
 **Why This Matters**: Developers will address all issues at once rather than iteratively. A thorough first pass saves 10-15 minutes per PR and reduces frustration.
 
 ## 1. Linear Requirement Validation (If Applicable)
-If a Linear issue is referenced:
-- **Use your Linear tools** to fetch issue details
-- Check issue description and acceptance criteria
-- Review comments for additional requirements
-- Validate PR changes align with stated requirements
-- Check for related issues that might provide context
-
-### Linear Issue Quality Assessment (Advisory)
-When you fetch a Linear issue, also assess its quality and provide **advisory feedback** (not blocking):
-
-**Check for**:
-- Clear, measurable acceptance criteria
-- Technical specifications (API contracts, data models, error handling)
-- Edge cases documented
-- Security/compliance requirements mentioned
-- Performance requirements specified
-
-**If issue quality is poor**, include this in your "Alignment with Linear Requirements" section:
-```
-⚠️ **Linear Issue Quality**: This issue could be improved with:
-- Specific acceptance criteria (e.g., "handles 10K records", "loads in <2s")
-- Edge case documentation (empty states, error scenarios)
-- Security requirements (authentication, data validation)
-
-This is advisory only - the review proceeds based on what IS documented.
-```
-
-**Note**: This helps improve issue quality over time for better requirement validation in future PRs.
+{linear_instructions}
 
 ## 2. Security Analysis (CRITICAL)
 - OWASP Top 10 vulnerabilities
@@ -425,8 +476,7 @@ Provide your review in this exact structure:
 
 # Guidelines
 
-- **Use Linear tools first** if an issue is referenced - get full context before reviewing code
-- Be specific with file paths and line numbers (`file.py:123` or `file.py:123-145`)
+{linear_usage_guideline}- Be specific with file paths and line numbers (`file.py:123` or `file.py:123-145`)
 - Prioritize security and correctness over style
 - Reference Linear requirements explicitly when applicable
 - Explain WHY something is an issue, not just WHAT
@@ -543,7 +593,8 @@ async def call_claude_with_mcp(
         if hasattr(message.usage, "cache_read_input_tokens"):
             print(f"⚡ Cache hit: {message.usage.cache_read_input_tokens} tokens")
 
-        return message.content[0].text, message, False  # No Linear context available
+        review_text = strip_tool_simulation_markup(message.content[0].text)
+        return review_text, message, False  # No Linear context available
 
     # Set up MCP server parameters
     server_params = StdioServerParameters(
@@ -609,6 +660,7 @@ async def call_claude_with_mcp(
                         for block in response.content:
                             if hasattr(block, "text"):
                                 review_text += block.text
+                        review_text = strip_tool_simulation_markup(review_text)
                         print("✓ Review completed")
                         return review_text, response, True  # Had Linear context via MCP
 
@@ -654,8 +706,9 @@ async def call_claude_with_mcp(
                     for block in response.content:
                         if hasattr(block, "text"):
                             review_text += block.text
+                    review_text = strip_tool_simulation_markup(review_text or "Review completed with unexpected stop reason")
                     return (
-                        review_text or "Review completed with unexpected stop reason",
+                        review_text,
                         response,
                         True,  # Had Linear context (even if unexpected stop)
                     )
@@ -684,7 +737,8 @@ async def call_claude_with_mcp(
             if cache_hit > 0:
                 print(f"⚡ Cache hit: {cache_hit} tokens")
 
-        return message.content[0].text, message, False  # No Linear context (fallback)
+        review_text = strip_tool_simulation_markup(message.content[0].text)
+        return review_text, message, False  # No Linear context (fallback)
 
 
 def log_token_metrics(response: Any, pr_number: int) -> None:
@@ -860,10 +914,21 @@ async def async_main(args: argparse.Namespace) -> int:
         full_diff = truncate_diff(full_diff, MAX_DIFF_LINES)
         print(f"✓ Collected diff ({len(full_diff)} characters)")
 
+        # Determine if Linear tools will be available
+        has_linear_tools = bool(linear_key)
+        if has_linear_tools:
+            # Quick check: is npx available?
+            import shutil
+            if not shutil.which("npx"):
+                print("⚠️  npx not found, Linear MCP will not be available")
+                has_linear_tools = False
+            else:
+                print("✓ npx found, Linear MCP will be available")
+
         # Build review prompt with caching optimization
         print("📝 Building review prompt...")
         static_content, dynamic_content = build_review_prompt(
-            pr, files, linear_id, claude_md, full_diff
+            pr, files, linear_id, claude_md, full_diff, has_linear_tools
         )
 
         # Call Claude API with MCP integration and prompt caching
