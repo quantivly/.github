@@ -16,13 +16,10 @@ permissions:
 
 jobs:
   claude-review:
-    # Only run on PR comments that match "@claude" or "@claude review"
+    # Only run on PR comments that mention "@claude" anywhere
     if: |
       github.event.issue.pull_request &&
-      (github.event.comment.body == '@claude' ||
-       github.event.comment.body == '@claude review' ||
-       startsWith(github.event.comment.body, '@claude ') ||
-       startsWith(github.event.comment.body, '@claude review '))
+      contains(github.event.comment.body, '@claude')
 
     # Call the centralized reusable workflow from the .github organization repository
     uses: quantivly/.github/.github/workflows/claude-review.yml@master

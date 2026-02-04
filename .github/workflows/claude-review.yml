@@ -30,14 +30,11 @@ permissions:
 
 jobs:
   claude-review:
-    # Only run on PR comments that match "@claude" or "@claude review"
+    # Only run on PR comments that mention "@claude" anywhere
     # SECURITY NOTE: We check comment.body in the if condition, but never pass it to shell
     if: |
       github.event.issue.pull_request &&
-      (github.event.comment.body == '@claude' ||
-       github.event.comment.body == '@claude review' ||
-       startsWith(github.event.comment.body, '@claude ') ||
-       startsWith(github.event.comment.body, '@claude review '))
+      contains(github.event.comment.body, '@claude')
 
     runs-on: ubuntu-latest
     timeout-minutes: 10
