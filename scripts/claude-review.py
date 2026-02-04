@@ -793,7 +793,7 @@ async def call_claude_with_mcp(
         return review_text, message, False, 0, None  # No Linear context (fallback)
 
 
-def log_token_metrics(response: Any, pr_number: int, tool_call_count: int = 0) -> None:
+def log_token_metrics(response: Any, pr_number: int, tool_call_count: int = 0) -> float:
     """
     Log detailed token usage for cost analysis and budget tracking.
 
@@ -801,6 +801,9 @@ def log_token_metrics(response: Any, pr_number: int, tool_call_count: int = 0) -
     - Input: $3.00/M tokens
     - Output: $15.00/M tokens
     - Cached input: $0.30/M tokens (90% cheaper)
+
+    Returns:
+        Total review cost in dollars
     """
     usage = response.usage
     input_tokens = usage.input_tokens
@@ -867,6 +870,8 @@ def log_token_metrics(response: Any, pr_number: int, tool_call_count: int = 0) -
         except Exception as e:
             print(f"⚠️  Failed to write metrics to GitHub summary: {e}")
 
+    return total_cost
+
 
 def post_review_comment(
     github: Github,
@@ -877,6 +882,7 @@ def post_review_comment(
     had_linear_context: bool = True,
     tool_call_count: int = 0,
     linear_issue_data: dict[str, Any] | None = None,
+    review_cost: float = 0.0,
 ) -> None:
     """Post formatted review comment to PR with Linear context status and metrics."""
     repo = github.get_repo(repo_full_name)
@@ -890,23 +896,7 @@ def post_review_comment(
 ---
 """
 
-    # Add Linear context section if available
-    if linear_issue_data:
-        description_preview = linear_issue_data.get("description", "")
-        if len(description_preview) > 150:
-            description_preview = description_preview[:150] + "..."
-
-        comment_body += f"""### 📋 Linear Context
-
-**Issue**: [{linear_issue_data.get('id', 'Unknown')}](https://linear.app/quantivly/issue/{linear_issue_data.get('id', '').lower()})
-**Title**: {linear_issue_data.get('title', 'N/A')}
-**Status**: {linear_issue_data.get('state', 'Unknown')}
-{f'**Description**: {description_preview}' if description_preview else ''}
-
----
-"""
-
-    # Add Linear context warning if not available
+    # Add Linear context warning if not available (keep the warning, just remove the section)
     if not had_linear_context:
         comment_body += """⚠️ **Linear Context**: Unable to fetch Linear issue context. Review performed without requirement validation.
 
@@ -920,10 +910,22 @@ def post_review_comment(
 ---
 """
 
-    # Build footer with tool usage if applicable
-    footer_parts = [f"Triggered by @{commenter}", "Powered by Claude Sonnet 4.5 with Linear MCP"]
-    if tool_call_count > 0:
+    # Build minimalist footer with Linear link, tool usage, and cost
+    footer_parts = [f"Triggered by @{commenter}", "Powered by Claude Sonnet 4.5"]
+
+    # Add Linear issue link if available
+    if linear_issue_data:
+        issue_id = linear_issue_data.get('id', '')
+        issue_url = f"https://linear.app/quantivly/issue/{issue_id.lower()}"
+        query_text = f"{tool_call_count} {'query' if tool_call_count == 1 else 'queries'}" if tool_call_count > 0 else "validated"
+        footer_parts.append(f"Reviewed [{issue_id}]({issue_url}) ({query_text})")
+    elif tool_call_count > 0:
         footer_parts.append(f"Validated using {tool_call_count} Linear {'query' if tool_call_count == 1 else 'queries'}")
+
+    # Add cost if available
+    if review_cost > 0:
+        footer_parts.append(f"Cost: ${review_cost:.2f}")
+
     footer_parts.append("[Learn more](https://github.com/quantivly/.github/blob/master/docs/claude-integration-guide.md)")
 
     comment_body += f"""<sub>{' | '.join(footer_parts)}</sub>
@@ -1016,12 +1018,12 @@ async def async_main(args: argparse.Namespace) -> int:
         )
 
         # Log token usage and cost metrics
-        log_token_metrics(final_response, args.pr_number, tool_call_count)
+        review_cost = log_token_metrics(final_response, args.pr_number, tool_call_count)
 
         # Post review comment with Linear context status and metrics
         post_review_comment(
             github, repo_full_name, args.pr_number, review_text, args.commenter,
-            had_linear_context, tool_call_count, linear_issue_data
+            had_linear_context, tool_call_count, linear_issue_data, review_cost
         )
 
         print("✅ Review completed successfully")
