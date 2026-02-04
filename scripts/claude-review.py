@@ -31,8 +31,17 @@ from typing import Any
 
 import anthropic
 from github import Github, GithubException
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession
+try:
+    # Try new import path (mcp >= 1.1.0)
+    from mcp.client.streamable_http import streamablehttp_client
+except ImportError:
+    # Fall back to older import path if it exists
+    try:
+        from mcp.client.sse import sse_client as streamablehttp_client
+    except ImportError:
+        # If neither exists, we'll handle this gracefully later
+        streamablehttp_client = None
 
 # Constants
 MAX_DIFF_LINES = 2000  # Limit diff size to control token usage
@@ -596,22 +605,30 @@ async def call_claude_with_mcp(
         review_text = strip_tool_simulation_markup(message.content[0].text)
         return review_text, message, False  # No Linear context available
 
-    # Set up MCP server parameters
-    # IMPORTANT: Must inherit current environment (especially PATH) for npx to work
-    # Only override LINEAR_API_KEY for the MCP server
-    mcp_env = os.environ.copy()
-    mcp_env["LINEAR_API_KEY"] = linear_api_key
+    # Check if HTTP client is available
+    if streamablehttp_client is None:
+        print("❌ MCP HTTP client not available in installed mcp package")
+        print("⚠️  Falling back to review without Linear tools")
+        # Fallback: call Claude without tools
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        message = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=MAX_TOKENS,
+            messages=[{"role": "user", "content": initial_content}],
+        )
+        review_text = strip_tool_simulation_markup(message.content[0].text)
+        return review_text, message, False
 
-    server_params = StdioServerParameters(
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-linear"],
-        env=mcp_env,
-    )
-
-    print("🔗 Connecting to Linear MCP server...")
+    # Connect to Linear's official hosted MCP server
+    linear_mcp_url = "https://mcp.linear.app/mcp"
+    print(f"🔗 Connecting to Linear MCP server at {linear_mcp_url}...")
 
     try:
-        async with stdio_client(server_params) as (read, write):
+        # Connect to Linear's hosted MCP server with bearer token auth
+        async with streamablehttp_client(
+            linear_mcp_url,
+            headers={"Authorization": f"Bearer {linear_api_key}"}
+        ) as (read, write, _):
             async with ClientSession(read, write) as session:
                 # Initialize MCP connection
                 await session.initialize()
@@ -920,15 +937,12 @@ async def async_main(args: argparse.Namespace) -> int:
         print(f"✓ Collected diff ({len(full_diff)} characters)")
 
         # Determine if Linear tools will be available
+        # (using Linear's hosted HTTP MCP server - no npx needed)
         has_linear_tools = bool(linear_key)
         if has_linear_tools:
-            # Quick check: is npx available?
-            import shutil
-            if not shutil.which("npx"):
-                print("⚠️  npx not found, Linear MCP will not be available")
-                has_linear_tools = False
-            else:
-                print("✓ npx found, Linear MCP will be available")
+            print("✓ Linear API key found, MCP tools will be available")
+        else:
+            print("⚠️  No LINEAR_API_KEY, Linear MCP will not be available")
 
         # Build review prompt with caching optimization
         print("📝 Building review prompt...")

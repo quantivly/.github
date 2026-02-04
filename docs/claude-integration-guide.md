@@ -474,20 +474,11 @@ For implementing features locally (not PR review), install Claude Code CLI with 
 # Install Claude Code CLI
 npm install -g @anthropic/claude-code
 
-# Configure Linear MCP server
-cat > ~/.config/claude/mcp.json <<EOF
-{
-  "mcpServers": {
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "lin_api_YOUR_KEY_HERE"
-      }
-    }
-  }
-}
-EOF
+# Configure Linear MCP server using Claude CLI (easiest method)
+claude mcp add --transport http linear-server https://mcp.linear.app/mcp
+
+# The above command will prompt for your Linear API key and configure everything automatically.
+# Alternatively, you can manually edit ~/.config/claude/mcp.json if needed.
 
 # Start Claude Code in your project
 cd ~/hub/sre-core

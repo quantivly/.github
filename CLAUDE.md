@@ -388,18 +388,22 @@ See [docs/deploying-claude-review.md](docs/deploying-claude-review.md) for compl
 Developers can optionally use Claude Code CLI with Linear MCP integration for feature implementation:
 
 ```bash
-# Configure Linear MCP in ~/.config/claude/mcp.json
-{
-  "mcpServers": {
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-linear"],
-      "env": {
-        "LINEAR_API_KEY": "lin_api_YOUR_KEY"
-      }
-    }
-  }
-}
+# Configure Linear MCP using Claude CLI (recommended)
+claude mcp add --transport http linear-server https://mcp.linear.app/mcp
+
+# OR manually add to ~/.config/claude/mcp.json:
+# {
+#   "mcpServers": {
+#     "linear-server": {
+#       "url": "https://mcp.linear.app/mcp",
+#       "transport": "http",
+#       "authorization": {
+#         "type": "bearer",
+#         "token": "YOUR_LINEAR_API_KEY"
+#       }
+#     }
+#   }
+# }
 
 # Use Claude Code with Linear context
 cd ~/hub/sre-core

@@ -115,11 +115,6 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Set up Node.js for Linear MCP
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'  # LTS version for @modelcontextprotocol/server-linear
-
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
@@ -127,7 +122,7 @@ jobs:
             "anthropic>=0.77.0" \
             "pygithub==2.4.0" \
             "requests==2.32.0" \
-            "mcp==1.0.0"
+            "mcp>=1.1.0"
 
       - name: Post review started message
         uses: actions/github-script@v7
