@@ -242,13 +242,18 @@ Quantivly has two complementary Claude review systems that use the same [review 
    HUB-1234 Add CSV export feature
    ```
 
-2. **Comment on PR to trigger review**:
+2. **Comment on PR to trigger review** (any comment mentioning `@claude`):
    ```
    @claude
    ```
-   or
    ```
    @claude review
+   ```
+   ```
+   Hey @claude, can you review this?
+   ```
+   ```
+   Thanks! @claude please check this out
    ```
 
 3. **Wait 2-5 minutes** for review to complete
@@ -405,7 +410,7 @@ claude
 ### Troubleshooting
 
 **Review not triggering**:
-- Check comment is exactly `@claude` or `@claude review`
+- Check comment contains `@claude` anywhere in the text
 - Verify you're an org member or collaborator
 - Check PR is open (not draft or closed)
 
