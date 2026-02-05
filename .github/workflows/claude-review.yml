@@ -190,7 +190,7 @@ jobs:
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh api repos/*/contents:*),Bash(gh api repos/*/issues/*/comments:*),Bash(gh api -X DELETE:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
@@ -220,6 +220,21 @@ jobs:
             **IMPORTANT**: Use the MCP tools below, NOT `gh pr review` or `gh pr comment` CLI commands.
             The MCP tools create proper review events with inline comments. CLI commands just create comments.
 
+            ## CRITICAL: Tool Usage Rules
+
+            **NEVER use `gh api` for posting reviews or comments to the PR diff.**
+            The CLI endpoints use deprecated `position` parameter that breaks inline comment positioning (results in `line: null`).
+
+            **ONLY use these MCP tools for the review workflow:**
+            - `mcp__plugin_github_github__pull_request_review_write` - create and submit reviews
+            - `mcp__plugin_github_github__add_comment_to_pending_review` - add each inline comment
+
+            **Acceptable `gh api` uses (read-only or progress comments):**
+            - `gh api repos/.../contents/...` - read files from other repos
+            - `gh api repos/.../issues/N/comments` - post/delete progress tracking comment
+
+            **VERIFICATION**: After Step 2, confirm you called `add_comment_to_pending_review` for each issue you identified. If you used `gh api pulls/.../comments` for any inline comment, that is WRONG - those comments will not appear inline.
+
             **Step 1: Create Pending Review**
             Use `mcp__plugin_github_github__pull_request_review_write` with:
             - method: "create"
@@ -228,14 +243,19 @@ jobs:
             - pullNumber: ${{ github.event.issue.number }}
             (Do NOT include the "event" parameter yet - this keeps the review pending)
 
-            **Step 2: Add Inline Comments**
-            For each specific issue on a line, use `mcp__plugin_github_github__add_comment_to_pending_review`:
-            - owner, repo, pullNumber: same as above
-            - path: file path relative to repo root
+            **Step 2: Add Inline Comments (REQUIRED for each issue)**
+
+            For EACH code issue, call `mcp__plugin_github_github__add_comment_to_pending_review` with these parameters:
+            - owner: "${{ github.repository_owner }}"
+            - repo: "${{ github.event.repository.name }}"
+            - pullNumber: ${{ github.event.issue.number }}
+            - path: File path relative to repo root (e.g., "src/auth/login.py")
             - body: Your comment with severity prefix (e.g., "🚨 **[CRITICAL]** SQL injection vulnerability...")
-            - line: The line number in the new version (right side of diff)
-            - side: "RIGHT" (comment on new code)
-            - subjectType: "LINE"
+            - line: The line number in the NEW version (right side of diff)
+            - side: "RIGHT" (always use RIGHT to comment on new code)
+            - subjectType: "LINE" (for line-specific) or "FILE" (for file-level comments)
+
+            **DO NOT use `gh api pulls/.../comments` - it creates broken inline comments with `line: null`!**
 
             Only use inline comments for issues on specific lines. General observations go in the review summary.
 
