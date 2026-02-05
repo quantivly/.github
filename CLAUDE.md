@@ -329,7 +329,7 @@ Platform uses Poetry for Python packages, Flyway for DB migrations, and pre-comm
 - Type/interface changes → validate compatibility across repos
 - `auto-conf` template changes → verify stack file rendering
 
-**Configuration**: Requires `GITHUB_MCP_TOKEN` organization secret (falls back to `GITHUB_TOKEN` if not set).
+**Configuration**: Requires `GH_MCP_TOKEN` organization secret (falls back to `GITHUB_TOKEN` if not set). Note: GitHub reserves the `GITHUB_` prefix for secrets, so we use `GH_` instead.
 
 ### Best Practices
 
