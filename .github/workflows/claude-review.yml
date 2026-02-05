@@ -14,9 +14,6 @@ on:
       LINEAR_API_KEY:
         required: false
         description: Linear API key for issue context retrieval
-      GH_MCP_TOKEN:
-        required: false
-        description: GitHub token for cross-repository MCP access (falls back to GITHUB_TOKEN)
       CLAUDE_APP_PRIVATE_KEY:
         required: false
         description: GitHub App private key for posting reviews as Claude[bot]
@@ -147,21 +144,30 @@ jobs:
             core.setOutput('custom', instructions);
 
       - name: Create MCP config file
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
-          cat > /tmp/mcp-config.json << 'EOF'
+          # Build MCP config with proper authentication
+          # Linear MCP requires Bearer token in Authorization header
+          # Only include Linear MCP if API key is available
+          if [ -n "$LINEAR_API_KEY" ]; then
+            cat > /tmp/mcp-config.json << EOF
           {
             "mcpServers": {
               "linear": {
                 "type": "url",
-                "url": "https://mcp.linear.app/mcp"
-              },
-              "github": {
-                "type": "url",
-                "url": "https://api.githubcopilot.com/mcp/"
+                "url": "https://mcp.linear.app/mcp",
+                "headers": {
+                  "Authorization": "Bearer ${LINEAR_API_KEY}"
+                }
               }
             }
           }
           EOF
+          else
+            # Empty config if no Linear API key
+            echo '{"mcpServers": {}}' > /tmp/mcp-config.json
+          fi
 
       - name: Post review started
         uses: actions/github-script@v7
@@ -177,9 +183,6 @@ jobs:
 
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          GH_MCP_TOKEN: ${{ secrets.GH_MCP_TOKEN || secrets.GITHUB_TOKEN }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -188,14 +191,13 @@ jobs:
             pr-review-toolkit@claude-plugins-official
             superpowers@claude-plugins-official
           # Allow tools for PR review:
-          # - MCP tools for GitHub operations (inline comments, regular comments)
-          # - MCP tools for Linear (issue context, requirements)
-          # - MCP tools for GitHub cross-repo (file contents, code search)
-          # - gh CLI for PR content and metadata
+          # - Action's built-in GitHub tools (inline comments, PR operations)
+          # - Linear MCP tools (issue context, requirements) via mcp-config
+          # - gh CLI for PR content, metadata, and cross-repo access
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__*,mcp__github_comment__*,mcp__linear__*,mcp__github__get_file_contents,mcp__github__search_code,mcp__github__get_commit,mcp__github__list_commits,mcp__github__get_pull_request,mcp__github__list_pull_request_files,mcp__github__search_pull_requests,Bash(gh pr *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
+            --allowedTools "mcp__github_inline_comment__*,mcp__github_comment__*,mcp__linear__*,Bash(gh pr *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
             --mcp-config /tmp/mcp-config.json
           prompt: |
             REPO: ${{ github.repository }}
@@ -222,10 +224,12 @@ jobs:
 
             ## Cross-Repository Validation
 
-            For changes to shared/exported code, use GitHub MCP tools to check consuming repositories:
+            For changes to shared/exported code, use `gh api` to check consuming repositories:
             - `sre-core` GraphQL changes → check `sre-ui` TypeScript types
             - `sre-sdk` changes → check `sre-core`, `sre-event-bridge`
             - `quantivly-sdk` changes → check `box`, `ptbi`
+
+            Example: `gh api repos/quantivly/sre-ui/contents/src/types.ts`
 
             ## Review Priorities
 
