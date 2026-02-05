@@ -1,6 +1,6 @@
 # Deploying Claude PR Review to Organization Repositories
 
-This guide explains how to enable Claude-powered PR reviews in Quantivly repositories using the centralized reusable workflow.
+This guide explains how to enable Claude-powered PR reviews in Quantivly repositories using the centralized reusable workflow powered by the official [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action).
 
 ## Overview
 
@@ -9,8 +9,24 @@ The Claude PR review system uses a **reusable workflow** pattern:
 - **Central workflow**: Lives in `quantivly/.github/.github/workflows/claude-review.yml`
 - **Caller workflows**: Minimal files in each repository's `.github/workflows/` directory
 - **Secrets**: Automatically inherited from organization secrets
+- **Plugins**: `pr-review-toolkit` and `superpowers` for enhanced analysis
 
 This maintains a single source of truth while allowing easy deployment to any repository.
+
+## What Changed (v2.0 Migration)
+
+The review system was migrated from a custom Python script to the official `anthropics/claude-code-action@v1`:
+
+| Feature | v1.0 (Custom Python) | v2.0 (Official Action) |
+|---------|---------------------|------------------------|
+| Review Engine | Custom `claude-review.py` | `anthropics/claude-code-action@v1` |
+| Inline Comments | Manual position mapping | Built-in `mcp__github_inline_comment` |
+| Plugins | None | `pr-review-toolkit`, `superpowers` |
+| Progress Tracking | None | Built-in with checkboxes |
+| Retry Logic | Custom retry wrapper | Built-in |
+| Maintenance | Manual updates | Anthropic-maintained |
+
+**Breaking Changes**: None - the caller workflow interface remains unchanged.
 
 ## Prerequisites
 
@@ -30,7 +46,7 @@ This maintains a single source of truth while allowing easy deployment to any re
 
 4. **Repository permissions**:
    - Caller must be org member or repo collaborator with write access
-   - Workflow must have permissions: `contents: read`, `issues: write`, `pull-requests: write`
+   - Workflow must have permissions: `contents: read`, `issues: write`, `pull-requests: write`, `id-token: write`
 
 5. **`.github` repository access enabled** (needs verification):
    - Navigate to Settings → Actions → General in the `.github` repository
@@ -68,7 +84,56 @@ git push origin master
 2. **Comment** `@claude` on the PR
 3. **Check Actions tab**: Navigate to `https://github.com/quantivly/<repo>/actions`
 4. **Verify workflow runs**: Should see "Claude PR Review" workflow triggered
-5. **Confirm review posted**: Check PR for Claude's review comment
+5. **Confirm review posted**: Check PR for Claude's review comment with inline annotations
+
+## Features
+
+### Plugin Capabilities
+
+The workflow includes two Claude Code plugins:
+
+**pr-review-toolkit** - Specialized review agents:
+- Security vulnerability analysis
+- Silent failure detection
+- Type design analysis
+- Test coverage assessment
+
+**superpowers** - Enhanced review workflow:
+- Verification before completion
+- Multi-pass analysis
+- Code quality enforcement
+
+### Progress Tracking
+
+Reviews now include a progress tracking comment showing:
+- ✅ Completed steps
+- ⏳ In-progress steps
+- Checklist of analysis phases
+
+### Inline Comments
+
+Claude posts inline comments directly on specific lines in the diff:
+- Security vulnerabilities marked with `[CRITICAL]`
+- Bug risks marked with `[HIGH]`
+- Suggestions marked with `[Suggestion]`
+- "Fix this" links for actionable issues
+
+### Linear Integration
+
+When PR title includes Linear issue ID (format: `AAA-####`):
+- Fetches issue description and acceptance criteria
+- Validates PR alignment with requirements
+- References specific requirements in feedback
+
+### Custom Reviewer Instructions
+
+Add instructions after `@claude` in your comment:
+
+```
+@claude focus on security and HIPAA compliance
+@claude please pay attention to the error handling in the retry logic
+@claude this is a performance-critical path, check for N+1 queries
+```
 
 ## Troubleshooting
 
@@ -80,6 +145,7 @@ git push origin master
 1. Caller workflow not merged to default branch
 2. Syntax error in workflow file
 3. Repository doesn't have Actions enabled
+4. Missing `id-token: write` permission (new in v2.0)
 
 **Solution**:
 ```bash
@@ -87,6 +153,9 @@ git push origin master
 git checkout master
 git pull origin master
 cat .github/workflows/claude-review.yml
+
+# Ensure permissions include id-token
+grep -A 5 "permissions:" .github/workflows/claude-review.yml
 
 # Check for YAML syntax errors
 yamllint .github/workflows/claude-review.yml
@@ -150,46 +219,42 @@ secrets:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+### Linear MCP Not Connecting
+
+**Symptom**: Review completes but doesn't include Linear context
+
+**Potential causes**:
+1. `LINEAR_API_KEY` not set
+2. MCP server connection timeout
+3. Invalid Linear API key
+
+**Solution**:
+- Verify `LINEAR_API_KEY` is set in organization secrets
+- Check workflow logs for MCP connection errors
+- Regenerate Linear API key if expired
+
 ### Review Fails or Times Out
 
 **Symptom**: Workflow runs but fails with API error
 
 **Potential causes**:
 1. Anthropic API rate limits
-2. Large PR causing timeout
-3. Linear API issues
+2. Large PR causing timeout (now 15 minutes)
+3. Plugin installation failure
 
 **Solution**:
 - Wait 5-10 minutes and retry with `@claude`
 - Check [workflow logs](https://github.com/quantivly/<repo>/actions) for specific error
-- Review retries automatically (3 attempts with 30s backoff)
+- For very large PRs, consider breaking into smaller PRs
 
-## Rollout Plan
-
-**Phase 1: Testing** (sre-core)
-- Deploy to `sre-core` repository
-- Test with real PRs
-- Verify Linear integration works
-- Monitor for errors over 1 week
-
-**Phase 2: Production** (hub, sre-ui)
-- Deploy to `hub` and `sre-ui` repositories
-- Announce to team in Slack
-- Update onboarding documentation
-
-**Phase 3: Rollout** (remaining repos)
-- Deploy to `quantivly-dockers`
-- Deploy to other active repositories
-- Archive inactive repositories first
-
-## Repository Status
+## Rollout Status
 
 | Repository | Status | Notes |
 |------------|--------|-------|
 | `.github` | ✅ Central workflow | Reusable workflow deployed |
-| `sre-core` | ⏳ Phase 1 | Ready for testing |
-| `hub` | ⏳ Phase 2 | Awaiting Phase 1 completion |
-| `sre-ui` | ⏳ Phase 2 | Awaiting Phase 1 completion |
+| `sre-core` | ✅ Deployed | First production repository |
+| `hub` | ⏳ Phase 2 | Ready for deployment |
+| `sre-ui` | ⏳ Phase 2 | Ready for deployment |
 | `quantivly-dockers` | ⏳ Phase 3 | Awaiting Phase 2 completion |
 
 ## Maintenance
@@ -207,6 +272,18 @@ No changes needed in individual repositories unless:
 - Changing trigger conditions
 - Modifying concurrency settings
 - Adjusting permissions
+
+### Plugin Updates
+
+Plugins update automatically when the action runs. No manual intervention needed.
+
+To pin specific plugin versions, modify the `plugins` parameter in the central workflow:
+
+```yaml
+plugins: |
+  pr-review-toolkit@1.2.3
+  superpowers@2.0.0
+```
 
 ### Removing Claude Review
 
@@ -233,10 +310,26 @@ Each Claude review costs approximately **$0.60-$0.90** depending on PR size.
 - Encourage local `claude` CLI for iterative development
 - Address critical feedback before re-reviewing
 
+## Comparison: GitHub Actions vs Local CLI
+
+| Feature | GitHub Actions (`@claude`) | Local CLI (`review-pr` skill) |
+|---------|---------------------------|------------------------------|
+| Purpose | Formal PR validation | Interactive development |
+| Trigger | PR comment | CLI session |
+| Posting | Automatic | User approval required |
+| Cost | Organization-paid | Developer-paid |
+| Plugins | `pr-review-toolkit`, `superpowers` | All installed plugins |
+| Flexibility | Standardized | Full customization |
+
+**Use GitHub Actions when**: PR is ready for formal review before requesting human review.
+
+**Use Local CLI when**: During development for early feedback or exploring design options.
+
 ## Related Documentation
 
 - [Claude Integration Guide](claude-integration-guide.md) - Complete usage guide
 - [Review Standards](review-standards.md) - What Claude reviews and how
+- [anthropics/claude-code-action](https://github.com/anthropics/claude-code-action) - Official action documentation
 - [GitHub Actions: Reusing Workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows) - Official documentation
 
 ## Questions?
