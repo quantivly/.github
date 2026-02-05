@@ -1,9 +1,11 @@
 name: Claude PR Review
 
 on:
+  # Direct trigger for PRs in this (.github) repository
   issue_comment:
     types: [created]
 
+  # Reusable workflow trigger for other repositories in the organization
   workflow_call:
     secrets:
       ANTHROPIC_API_KEY:
@@ -12,6 +14,11 @@ on:
       LINEAR_API_KEY:
         required: false
         description: Linear API key for issue context retrieval
+      CLAUDE_APP_PRIVATE_KEY:
+        required: false
+        description: GitHub App private key for posting reviews as Claude[bot]
+
+# Note: Concurrency control is handled by the caller workflow
 
 permissions:
   contents: read
@@ -28,13 +35,154 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Validate commenter permissions
+        id: validate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commenter = context.payload.comment.user.login;
+            const repo = context.repo;
+
+            // Try org membership first
+            try {
+              await github.rest.orgs.checkMembershipForUser({
+                org: repo.owner,
+                username: commenter,
+              });
+              console.log(`✓ ${commenter} is organization member`);
+              return true;
+            } catch (orgError) {
+              // Check if repo collaborator with write access
+              try {
+                const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  username: commenter,
+                });
+                if (['write', 'admin', 'maintain'].includes(permission.permission)) {
+                  console.log(`✓ ${commenter} is collaborator with ${permission.permission} access`);
+                  return true;
+                }
+              } catch (e) {}
+              console.log(`✗ ${commenter} does not have sufficient permissions`);
+              return false;
+            }
+
+      - name: Post permission denied
+        if: steps.validate.outputs.result == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ Claude reviews are only available to organization members and repository collaborators with write access.'
+            });
+
+      - name: Exit if permission denied
+        if: steps.validate.outputs.result == 'false'
+        run: exit 0
+
+      - name: Generate GitHub App token
+        id: app-token
+        if: vars.CLAUDE_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.CLAUDE_APP_ID }}
+          private-key: ${{ secrets.CLAUDE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Checkout .github repository for review standards
+        uses: actions/checkout@v4
+        with:
+          repository: quantivly/.github
+          path: .github-org
+          sparse-checkout: |
+            docs/review-standards.md
+          fetch-depth: 1
+
+      - name: Extract Linear issue ID
+        id: linear
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            const match = pr.title.match(/^([A-Z]+-\d+)/);
+            core.setOutput('linear_id', match ? match[1] : '');
+            console.log(match ? `Linear issue: ${match[1]}` : 'No Linear issue ID in PR title');
+
+      - name: Post review started
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '🤖 Claude review started... This typically takes 2-5 minutes.\n\n_Analyzing code for security, logic errors, code quality, testing, and performance._'
+            });
 
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           prompt: |
-            Review this PR briefly. Post a short comment with your assessment.
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.issue.number }}
+            LINEAR ISSUE: ${{ steps.linear.outputs.linear_id || 'Not specified' }}
+
+            ## Your Role
+
+            You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
+
+            ## Review Standards
+
+            Read `.github-org/docs/review-standards.md` for severity levels, checklists, and output format.
+            Also read the repository's `CLAUDE.md` if it exists.
+
+            ## Review Priorities
+
+            1. **Security** - OWASP Top 10, HIPAA compliance, SQL injection, XSS, credentials
+            2. **Logic Errors** - Incorrect implementations, edge cases, race conditions
+            3. **Code Quality** - Readability, SOLID principles, design patterns
+            4. **Testing** - Coverage, edge cases, test quality
+            5. **Performance** - N+1 queries, algorithmic efficiency
+
+            ## Healthcare Context
+
+            Extra scrutiny for PHI handling, audit logging, access controls, and HIPAA compliance.
+
+            ## Output
+
+            Use inline comments via `mcp__github_inline_comment__create_inline_comment` for specific issues.
+            Post a summary comment with overall assessment and recommendation (APPROVE/REQUEST_CHANGES/COMMENT).
+
+            Use severity labels: **[CRITICAL]**, **[HIGH]**, **[Suggestion]**
+
+            End summary with:
+            ---
+            <sub>Triggered by @${{ github.event.comment.user.login }} | Powered by Claude Code</sub>
+
+      - name: Post error on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ Claude review failed. Check [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nRetry by commenting \`@claude\`.`
+            });
