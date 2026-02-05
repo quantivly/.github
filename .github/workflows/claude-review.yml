@@ -177,6 +177,29 @@ jobs:
 
             You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
 
+            ## Quantivly Architecture
+
+            Two-layer architecture: platform provides foundational data infrastructure, hub provides user-facing analytics portal.
+
+            **platform** (quantivly-dockers) - Core DICOM/RIS backbone
+            | Component | Role | Depends On |
+            |-----------|------|------------|
+            | box | DICOM harmonization (GE/Philips/Siemens), RIS integration | quantivly-sdk |
+            | ptbi | DICOM networking (Python+Java/dcm4che) | quantivly-sdk |
+            | auto-conf | Jinja2 stack generator (configures platform AND hub) | — |
+            | quantivly-sdk | Python SDK for platform services | — |
+
+            **hub** (hub repo) - Healthcare analytics portal
+            | Repository | Role | Depends On |
+            |------------|------|------------|
+            | sre-core | Django backend (GraphQL API, plugin system) | sre-sdk |
+            | sre-ui | Next.js frontend | sre-core GraphQL |
+            | sre-event-bridge | WAMP→REST bridge | sre-sdk |
+            | sre-postgres | PostgreSQL database | — |
+            | sre-sdk | Python SDK for hub services | — |
+
+            **Connection**: Hub integrates with platform's backbone (Keycloak auth, WAMP router, shared networking). Platform's auto-conf generates deployment configs for both ecosystems.
+
             ## Review Standards
 
             Read `.github-org/docs/review-standards.md` for severity levels, checklists, and output format.
@@ -192,12 +215,16 @@ jobs:
 
             ## Cross-Repository Validation
 
-            For changes to shared/exported code, use `gh api` to check consuming repositories:
-            - `sre-core` GraphQL changes → check `sre-ui` TypeScript types
-            - `sre-sdk` changes → check `sre-core`, `sre-event-bridge`
-            - `quantivly-sdk` changes → check `box`, `ptbi`
+            When reviewing changes to shared/exported code, validate consumers using `gh api`:
 
-            Example: `gh api repos/quantivly/sre-ui/contents/src/types.ts`
+            | Change In | Must Validate Against | Example Check |
+            |-----------|----------------------|---------------|
+            | sre-core GraphQL schema | sre-ui TypeScript types/queries | `gh api repos/quantivly/sre-ui/contents/src/graphql` |
+            | sre-sdk | sre-core, sre-event-bridge | Check imports and API usage |
+            | quantivly-sdk | box, ptbi | Check SDK method calls |
+            | auto-conf templates | Rendered stack files | Verify Jinja2 renders correctly |
+
+            Use: `gh api repos/quantivly/<repo>/contents/<path>` to fetch files from other repos.
 
             ## Review Priorities
 
