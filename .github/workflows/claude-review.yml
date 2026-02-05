@@ -147,10 +147,14 @@ jobs:
             core.setOutput('custom', instructions);
 
       - name: Create MCP config for Linear
+        if: env.LINEAR_API_KEY != ''
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
-          # Create .mcp.json with env var reference for Claude Code to expand at runtime
-          echo '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer ${LINEAR_API_KEY}"}}}}' > .mcp.json
-          echo "Created .mcp.json with Linear MCP server (uses LINEAR_API_KEY env var)"
+          # Create .mcp.json with actual API key (shell expands the variable)
+          # Using printf to avoid echo interpretation issues
+          printf '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer %s"}}}}' "$LINEAR_API_KEY" > .mcp.json
+          echo "Created .mcp.json with Linear MCP server configuration"
 
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
