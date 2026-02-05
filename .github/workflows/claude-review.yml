@@ -178,9 +178,10 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           track_progress: true
-          plugins: |
-            pr-review-toolkit@claude-plugins-official
-            superpowers@claude-plugins-official
+          # TODO: Re-enable plugins once installation issues are resolved
+          # plugins: |
+          #   pr-review-toolkit@claude-plugins-official
+          #   superpowers@claude-plugins-official
           # Allow tools for PR review:
           # - Action's built-in GitHub tools (inline comments, PR operations)
           # - Linear MCP tools (issue context, requirements) via mcp-config
