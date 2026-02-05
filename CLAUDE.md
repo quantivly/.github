@@ -423,14 +423,15 @@ Run: Automatically on PR push
 - Uses `anthropics/claude-code-action@v1` with plugins
 
 **Plugins**:
-- `pr-review-toolkit@claude-plugins-official` - Specialized review agents (security, silent failures, type design)
-- `superpowers@claude-plugins-official` - Enhanced review workflow (verification, multi-pass)
+- `linear@claude-plugins-official` - Issue context and requirements validation
+- `github@claude-plugins-official` - Formal review tools (pull_request_review_write, add_comment_to_pending_review)
 
 **Features**:
-- Inline comments via `mcp__github_inline_comment__create_inline_comment`
-- Progress tracking with checkboxes
-- Linear MCP integration for requirement validation
-- Custom reviewer instructions from `@claude` comments
+- **Formal reviews**: Uses `pull_request_review_write` for proper APPROVE/REQUEST_CHANGES/COMMENT events
+- **Inline review comments**: Uses `add_comment_to_pending_review` for line-specific feedback attached to the review
+- **Progress tracking**: Real-time tracking comment during review (auto-deleted after completion)
+- **Linear MCP integration**: Validates PR against issue requirements
+- **Custom reviewer instructions**: Extracted from `@claude` comments
 
 **Cost**: ~$0.60-$0.90 per review (covered by organization)
 
