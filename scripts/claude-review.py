@@ -734,6 +734,8 @@ async def multi_mcp_sessions(
         - all_tools: Combined list of tools in Anthropic format
         - tool_router: Dict mapping tool_name -> (session, original_name)
     """
+    from contextlib import AsyncExitStack
+
     all_tools: list[dict[str, Any]] = []
     tool_router: dict[str, tuple[ClientSession, str]] = {}
 
@@ -747,22 +749,22 @@ async def multi_mcp_sessions(
         yield all_tools, tool_router
         return
 
-    # Use a list to track sessions so we can clean them up
-    sessions_to_close: list[tuple[Any, ClientSession]] = []
-
-    try:
+    # Use AsyncExitStack to properly manage multiple async context managers
+    async with AsyncExitStack() as stack:
         # Connect to Linear MCP if API key provided
         if linear_api_key:
             try:
                 print(f"🔗 Connecting to Linear MCP server at {LINEAR_MCP_URL}...")
-                linear_ctx = await streamablehttp_client(
-                    LINEAR_MCP_URL,
-                    headers={"Authorization": f"Bearer {linear_api_key}"},
-                ).__aenter__()
+                linear_ctx = await stack.enter_async_context(
+                    streamablehttp_client(
+                        LINEAR_MCP_URL,
+                        headers={"Authorization": f"Bearer {linear_api_key}"},
+                    )
+                )
 
-                linear_session = ClientSession(linear_ctx[0], linear_ctx[1])
-                await linear_session.__aenter__()
-                sessions_to_close.append((linear_ctx, linear_session))
+                linear_session = await stack.enter_async_context(
+                    ClientSession(linear_ctx[0], linear_ctx[1])
+                )
 
                 await linear_session.initialize()
                 linear_tools_response = await linear_session.list_tools()
@@ -786,14 +788,16 @@ async def multi_mcp_sessions(
         if github_mcp_token:
             try:
                 print(f"🔗 Connecting to GitHub MCP server at {GITHUB_MCP_URL}...")
-                github_ctx = await streamablehttp_client(
-                    GITHUB_MCP_URL,
-                    headers={"Authorization": f"Bearer {github_mcp_token}"},
-                ).__aenter__()
+                github_ctx = await stack.enter_async_context(
+                    streamablehttp_client(
+                        GITHUB_MCP_URL,
+                        headers={"Authorization": f"Bearer {github_mcp_token}"},
+                    )
+                )
 
-                github_session = ClientSession(github_ctx[0], github_ctx[1])
-                await github_session.__aenter__()
-                sessions_to_close.append((github_ctx, github_session))
+                github_session = await stack.enter_async_context(
+                    ClientSession(github_ctx[0], github_ctx[1])
+                )
 
                 await github_session.initialize()
                 github_tools_response = await github_session.list_tools()
@@ -818,18 +822,6 @@ async def multi_mcp_sessions(
                 print(f"⚠️  GitHub MCP error: {e}")
 
         yield all_tools, tool_router
-
-    finally:
-        # Clean up sessions in reverse order
-        for ctx, session in reversed(sessions_to_close):
-            try:
-                await session.__aexit__(None, None, None)
-            except Exception:
-                pass
-            try:
-                await ctx.__aexit__(None, None, None)
-            except Exception:
-                pass
 
 
 async def call_claude_with_mcp(
