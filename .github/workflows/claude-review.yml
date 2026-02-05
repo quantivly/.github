@@ -138,8 +138,12 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           # Allow tools for PR review
+          # - MCP tools for GitHub operations (inline comments, regular comments)
+          # - gh CLI for PR content and metadata
+          # - File tools for reading codebase
+          # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Read,Glob,Grep,LS"
+            --allowedTools "mcp__github_inline_comment__*,mcp__github_comment__*,Bash(gh pr *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
