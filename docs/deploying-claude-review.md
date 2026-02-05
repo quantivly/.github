@@ -31,9 +31,10 @@ The review system was migrated from a custom Python script to the official `anth
 ## Prerequisites
 
 1. **Organization secrets configured** (already done):
-   - `ANTHROPIC_API_KEY` - Claude API access
-   - `LINEAR_API_KEY` - Linear issue context
-   - `CLAUDE_APP_PRIVATE_KEY` - GitHub App private key for Claude[bot] identity
+   - `ANTHROPIC_API_KEY` - Claude API access (required)
+   - `LINEAR_API_KEY` - Linear issue context (optional, for requirement validation)
+   - `GH_MCP_TOKEN` - GitHub token for cross-repository context (optional, falls back to `GITHUB_TOKEN`)
+   - `CLAUDE_APP_PRIVATE_KEY` - GitHub App private key for Claude[bot] identity (optional)
    - `GITHUB_TOKEN` - Automatically provided by GitHub Actions
 
 2. **Organization variables configured** (already done):
@@ -205,7 +206,8 @@ ls -la .github/workflows/claude-review.yml
 ```bash
 # Verify organization secrets exist:
 # Navigate to: https://github.com/organizations/quantivly/settings/secrets/actions
-# Confirm: ANTHROPIC_API_KEY, LINEAR_API_KEY exist
+# Confirm: ANTHROPIC_API_KEY exists (required)
+# Optional: LINEAR_API_KEY, GH_MCP_TOKEN, CLAUDE_APP_PRIVATE_KEY
 
 # Alternative: Explicitly pass secrets (not recommended)
 # Edit caller workflow to replace "secrets: inherit" with:
@@ -228,6 +230,20 @@ secrets:
 - Verify `LINEAR_API_KEY` is set in organization secrets
 - Check workflow logs for MCP connection errors
 - Regenerate Linear API key if expired
+
+### GitHub MCP Not Working (Cross-Repository Context)
+
+**Symptom**: Review doesn't fetch code from related repositories
+
+**Potential causes**:
+1. `GH_MCP_TOKEN` not set (falls back to `GITHUB_TOKEN` with limited cross-repo access)
+2. Token doesn't have permissions to access other repositories
+3. MCP server connection timeout
+
+**Solution**:
+- For cross-repository access, set `GH_MCP_TOKEN` with appropriate permissions
+- Verify the token can access the repositories Claude should read from
+- Check workflow logs for MCP connection errors
 
 ### Review Fails or Times Out
 
