@@ -24,7 +24,7 @@ jobs:
     # Call the centralized reusable workflow from the .github organization repository
     uses: quantivly/.github/.github/workflows/claude-review.yml@master
     # Pass all organization secrets to the reusable workflow
-    # Required secrets: ANTHROPIC_API_KEY, LINEAR_API_KEY
-    # Optional secrets: GH_MCP_TOKEN, CLAUDE_APP_PRIVATE_KEY
+    # Required secrets: ANTHROPIC_API_KEY
+    # Optional secrets: LINEAR_API_KEY, CLAUDE_APP_PRIVATE_KEY
     # Required variables: CLAUDE_APP_ID (for Claude[bot] identity)
     secrets: inherit
