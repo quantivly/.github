@@ -304,30 +304,32 @@ Claude can fetch code from related repositories when reviewing PRs. This enables
 
 **Quantivly repository architecture**:
 
-**hub** - Superproject + release management repo that creates manifest images with correct service versions. Contains submodules: sre-core, sre-ui, sre-event-bridge, sre-postgres.
+Two main ecosystems with distinct dependencies:
 
-| Repository | Description |
-|------------|-------------|
-| `sre-core` | Django backend - GraphQL API, business logic |
-| `sre-ui` | React + Next.js frontend - consumes sre-core APIs |
-| `sre-event-bridge` | WAMP router bridge - notifies backend via REST API |
-| `sre-postgres` | PostgreSQL database for hub |
+**hub** - Healthcare analytics product (superproject with submodules)
+| Repository | Role | Key Dependencies |
+|------------|------|------------------|
+| `sre-core` | Django backend (GraphQL API, plugins) | `sre-sdk` (Python SDK via git) |
+| `sre-ui` | Next.js frontend | `sre-core` APIs |
+| `sre-event-bridge` | WAMP→REST bridge | `sre-sdk` |
+| `sre-postgres` | PostgreSQL database | — |
+| `sre-sdk` | SDK for hub Python services | — |
 
-**platform** (quantivly-dockers) - Monorepo containing backbone services with Docker Swarm/Compose orchestration and WAMP for inter-service communication:
+**platform** (quantivly-dockers) - DICOM/RIS backbone services
+| Component | Role | Key Dependencies |
+|-----------|------|------------------|
+| `auto-conf` | Jinja2 stack generator (also generates hub deployment configs) | — |
+| `box` | DICOM harmonization (GE/Philips/Siemens), RIS | `quantivly-sdk` |
+| `ptbi` | DICOM networking (Python+Java/dcm4che) | `quantivly-sdk` |
+| `quantivly-sdk` | SDK for platform Python services | — |
 
-| Component | Description |
-|-----------|-------------|
-| `auto-conf` | Configuration generator - Jinja2 templates for Docker Compose, shell scripts, configs. Two-phase: configure → generate |
-| `box` | Data processing engine - DICOM harmonization (GE, Philips, Siemens), RIS integration, job processing |
-| `ptbi` | DICOM networking - Python + Java (dcm4che) for SCP/SCU operations |
-| `quantivly-sdk` | Foundation library - database utilities, WAMP client, DICOM processing, job framework |
-
-Platform uses Poetry for Python packages, Flyway for DB migrations, and pre-commit hooks (Black, isort, Ruff).
+**Cross-ecosystem integration**: `auto-conf` generates deployment configs for *both* platform services and hub (`auto-conf/modules/quantivly/sre/`).
 
 **When to expect cross-repo validation**:
-- API endpoint changes in `sre-core` → check `sre-ui` consumers
-- Type/interface changes → validate compatibility across repos
-- `auto-conf` template changes → verify stack file rendering
+- `sre-core` GraphQL changes → check `sre-ui` queries/types
+- `sre-sdk` changes → check `sre-core`, `sre-event-bridge`
+- `quantivly-sdk` changes → check `box`, `ptbi`
+- `auto-conf` template changes → verify rendered stack files
 
 **Configuration**: Requires `GH_MCP_TOKEN` organization secret (falls back to `GITHUB_TOKEN` if not set). Note: GitHub reserves the `GITHUB_` prefix for secrets, so we use `GH_` instead.
 
@@ -721,12 +723,18 @@ Use imperative mood. If no Linear issue, use descriptive summary only.
 ## Related Resources
 
 **Quantivly Repositories**:
-- [hub](https://github.com/quantivly/hub) - Superproject + release management (creates manifest images for sre-* components)
-- [sre-core](https://github.com/quantivly/sre-core) - Django backend (GraphQL API, business logic)
-- [sre-ui](https://github.com/quantivly/sre-ui) - React + Next.js frontend (consumes sre-core APIs)
-- [sre-event-bridge](https://github.com/quantivly/sre-event-bridge) - WAMP router bridge (notifies backend via REST API)
-- [sre-postgres](https://github.com/quantivly/sre-postgres) - PostgreSQL database for hub
-- [platform (quantivly-dockers)](https://github.com/quantivly/quantivly-dockers) - Backbone services (auto-conf, box, ptbi, quantivly-sdk)
+
+*hub ecosystem* (healthcare analytics):
+- [hub](https://github.com/quantivly/hub) - Superproject coordinating sre-* components
+- [sre-core](https://github.com/quantivly/sre-core) - Django backend (GraphQL, plugins) → uses `sre-sdk`
+- [sre-ui](https://github.com/quantivly/sre-ui) - Next.js frontend → consumes `sre-core` APIs
+- [sre-event-bridge](https://github.com/quantivly/sre-event-bridge) - WAMP→REST bridge → uses `sre-sdk`
+- [sre-sdk](https://github.com/quantivly/sre-sdk) - Python SDK for hub services
+- [sre-postgres](https://github.com/quantivly/sre-postgres) - PostgreSQL database
+
+*platform ecosystem* (DICOM/RIS backbone):
+- [platform (quantivly-dockers)](https://github.com/quantivly/quantivly-dockers) - Monorepo with auto-conf, box, ptbi
+- [quantivly-sdk](https://github.com/quantivly/quantivly-sdk) - Python SDK for platform services (box, ptbi use it)
 
 **GitHub Documentation**:
 - [Creating a default community health file](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file)

@@ -305,62 +305,34 @@ When GitHub MCP tools are available, Claude can fetch code from related reposito
 
 ### Quantivly Repository Architecture
 
-**hub** (superproject + release management)
-- Creates manifest images with correct service versions
-- Orchestrates releases across sre-* components
-- Contains submodules: sre-core, sre-ui, sre-event-bridge, sre-postgres
+Two ecosystems with separate SDKs:
 
-**sre-*** (hub components)
-| Repository | Description |
-|------------|-------------|
-| `sre-core` | Django backend - GraphQL API, business logic |
-| `sre-ui` | React + Next.js frontend - consumes sre-core APIs |
-| `sre-event-bridge` | WAMP router bridge - notifies backend via REST API |
-| `sre-postgres` | PostgreSQL database for hub |
+**hub** - Healthcare analytics product (superproject)
+| Repository | Role | Depends On |
+|------------|------|------------|
+| `sre-core` | Django backend (GraphQL, plugins) | `sre-sdk` |
+| `sre-ui` | Next.js frontend | `sre-core` GraphQL |
+| `sre-event-bridge` | WAMP→REST bridge | `sre-sdk` |
+| `sre-postgres` | PostgreSQL database | — |
+| `sre-sdk` | Python SDK for hub services | — |
 
-**platform** (quantivly-dockers - backbone services)
+**platform** (quantivly-dockers) - DICOM/RIS backbone
+| Component | Role | Depends On |
+|-----------|------|------------|
+| `auto-conf` | Jinja2 stack generator | — |
+| `box` | DICOM harmonization (GE/Philips/Siemens), RIS | `quantivly-sdk` |
+| `ptbi` | DICOM networking (Python+Java/dcm4che) | `quantivly-sdk` |
+| `quantivly-sdk` | Python SDK for platform services | — |
 
-The platform repository is a monorepo containing the core infrastructure and data processing services. It uses Docker Swarm/Compose orchestration with WAMP (Web Application Messaging Protocol) for inter-service communication.
-
-| Component | Description |
-|-----------|-------------|
-| `auto-conf` | Stack file templates and rendering logic for all products |
-| `box` | Main data processing engine (DICOM harmonization, RIS) |
-| `ptbi` | DICOM networking (SCP/SCU operations) |
-| `quantivly-sdk` | Foundation library for all Python services |
-
-**auto-conf** (Configuration Generator)
-- Jinja2-based templating with modular architecture
-- Two-phase execution: configure (gather settings) → generate (render templates)
-- Generates Docker Compose files, shell scripts, and service configs
-- Git-based versioning of configurations (timestamped branches)
-- Module hierarchy: QuantivlyRoot → Crossbar, Box, PTBIs, ELK, SRE, etc.
-- Key files: `configure.py` (entry point), `templates/` (Jinja2 templates)
-
-**quantivly-sdk** (Foundation Library)
-- Database utilities, WAMP client, DICOM processing, job framework, logging
-- Used by all Python services via Poetry: `quantivly-sdk = { path = "../quantivly-sdk", develop = true }`
-- Changes here affect: box, ptbi, healthcheck, and other Python services
-
-**box** (Data Processing Engine)
-- DICOM harmonization with vendor-specific parsers (GE, Philips, Siemens)
-- RIS (Radiology Information System) data integration
-- Resource scheduling and equipment aliasing
-- Job processing: indexing, mapping, protocol algorithms
-- Database migrations via Flyway (`box/sql/box/migrations/`)
-
-**ptbi** (DICOM Networking)
-- Hybrid Python + Java service using dcm4che library
-- DICOM SCP/SCU operations (C-MOVE, C-STORE, C-FIND)
-- Maven multi-module project: ptbi-utils, ptbi-db, ptbi-http, ptbi-pullscp, ptbi-forwardscp
+**Key integration point**: `auto-conf` generates stack configs for *both* ecosystems—platform services (`modules/quantivly/box/`, etc.) and hub services (`modules/quantivly/sre/`).
 
 ### Cross-Repo Validation Examples
 | Change In | Validate Against |
 |-----------|------------------|
-| `sre-core` GraphQL schema | `sre-ui` TypeScript types and queries |
-| `sre-core` API endpoints | `sre-ui` API client calls |
-| `platform/auto-conf` templates | Rendered stack files for hub, other products |
-| `platform/quantivly-sdk` | Services using SDK (box, ptbi) |
+| `sre-core` GraphQL schema | `sre-ui` TypeScript types/queries |
+| `sre-sdk` | `sre-core`, `sre-event-bridge` |
+| `quantivly-sdk` | `box`, `ptbi`, `healthcheck` |
+| `auto-conf` templates | Rendered stack files |
 
 ### Available GitHub MCP Tools
 - `github_get_file_contents` - Read specific files from any Quantivly repo
