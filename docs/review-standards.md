@@ -319,12 +319,40 @@ When GitHub MCP tools are available, Claude can fetch code from related reposito
 | `sre-postgres` | PostgreSQL database for hub |
 
 **platform** (quantivly-dockers - backbone services)
+
+The platform repository is a monorepo containing the core infrastructure and data processing services. It uses Docker Swarm/Compose orchestration with WAMP (Web Application Messaging Protocol) for inter-service communication.
+
 | Component | Description |
 |-----------|-------------|
 | `auto-conf` | Stack file templates and rendering logic for all products |
 | `box` | Main data processing engine (DICOM harmonization, RIS) |
 | `ptbi` | DICOM networking (SCP/SCU operations) |
 | `quantivly-sdk` | Foundation library for all Python services |
+
+**auto-conf** (Configuration Generator)
+- Jinja2-based templating with modular architecture
+- Two-phase execution: configure (gather settings) → generate (render templates)
+- Generates Docker Compose files, shell scripts, and service configs
+- Git-based versioning of configurations (timestamped branches)
+- Module hierarchy: QuantivlyRoot → Crossbar, Box, PTBIs, ELK, SRE, etc.
+- Key files: `configure.py` (entry point), `templates/` (Jinja2 templates)
+
+**quantivly-sdk** (Foundation Library)
+- Database utilities, WAMP client, DICOM processing, job framework, logging
+- Used by all Python services via Poetry: `quantivly-sdk = { path = "../quantivly-sdk", develop = true }`
+- Changes here affect: box, ptbi, healthcheck, and other Python services
+
+**box** (Data Processing Engine)
+- DICOM harmonization with vendor-specific parsers (GE, Philips, Siemens)
+- RIS (Radiology Information System) data integration
+- Resource scheduling and equipment aliasing
+- Job processing: indexing, mapping, protocol algorithms
+- Database migrations via Flyway (`box/sql/box/migrations/`)
+
+**ptbi** (DICOM Networking)
+- Hybrid Python + Java service using dcm4che library
+- DICOM SCP/SCU operations (C-MOVE, C-STORE, C-FIND)
+- Maven multi-module project: ptbi-utils, ptbi-db, ptbi-http, ptbi-pullscp, ptbi-forwardscp
 
 ### Cross-Repo Validation Examples
 | Change In | Validate Against |
@@ -358,10 +386,20 @@ Quantivly builds healthcare analytics software, which means:
 - **Third-Party**: External service integration requires BAA
 
 ### Common Patterns
-- **Django**: Plugin system, GraphQL API, Celery tasks
-- **Next.js**: Server-side rendering, Keycloak auth
+
+**hub (sre-*) patterns**:
+- **Django (sre-core)**: Plugin system, GraphQL API, Celery tasks
+- **Next.js (sre-ui)**: Server-side rendering, Keycloak auth
 - **Data Flow**: PostgreSQL → Django → GraphQL → Next.js
 - **Authentication**: Hybrid Keycloak + Django admin
+
+**platform patterns**:
+- **WAMP**: Inter-service communication via Crossbar.io router (pub/sub + RPC)
+- **Poetry**: Package management for all Python services
+- **Docker Swarm**: Container orchestration with Compose files
+- **Flyway**: SQL database migrations with versioned scripts
+- **Code Style**: Black (120 line-length), isort, Ruff, pre-commit hooks
+- **Testing**: pytest with `--dockers-host` for integration tests
 
 ## Continuous Improvement
 

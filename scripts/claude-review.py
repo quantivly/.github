@@ -486,12 +486,19 @@ You have GitHub MCP tools (prefixed with `github_`) for fetching code from Quant
 4. **SDK changes** in `platform` → Check consuming services (box, ptbi)
 
 **Quantivly repository architecture**:
+
+*hub ecosystem* (healthcare analytics product):
 - `hub` - Superproject + release management (creates manifest images for sre-* components)
 - `sre-core` - Django backend (GraphQL API, business logic)
 - `sre-ui` - React + Next.js frontend (consumes sre-core APIs)
 - `sre-event-bridge` - WAMP router bridge (notifies backend via REST API)
 - `sre-postgres` - PostgreSQL database for hub
-- `platform` - Backbone services (auto-conf, box, ptbi, quantivly-sdk)
+
+*platform* (quantivly-dockers - backbone services with Docker Swarm + WAMP):
+- `auto-conf` - Configuration generator (Jinja2 templates → Docker Compose, shell scripts)
+- `box` - Data processing engine (DICOM harmonization for GE/Philips/Siemens, RIS integration)
+- `ptbi` - DICOM networking (Python + Java/dcm4che for SCP/SCU operations)
+- `quantivly-sdk` - Foundation library (DB utils, WAMP client, DICOM processing, job framework)
 
 **Guidelines**:
 - Only access repositories within the `quantivly` organization

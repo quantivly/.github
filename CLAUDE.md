@@ -312,7 +312,17 @@ Claude can fetch code from related repositories when reviewing PRs. This enables
 | `sre-ui` | React + Next.js frontend - consumes sre-core APIs |
 | `sre-event-bridge` | WAMP router bridge - notifies backend via REST API |
 | `sre-postgres` | PostgreSQL database for hub |
-| `platform` | Backbone services (auto-conf, box, ptbi, quantivly-sdk) |
+
+**platform** (quantivly-dockers) - Monorepo containing backbone services with Docker Swarm/Compose orchestration and WAMP for inter-service communication:
+
+| Component | Description |
+|-----------|-------------|
+| `auto-conf` | Configuration generator - Jinja2 templates for Docker Compose, shell scripts, configs. Two-phase: configure → generate |
+| `box` | Data processing engine - DICOM harmonization (GE, Philips, Siemens), RIS integration, job processing |
+| `ptbi` | DICOM networking - Python + Java (dcm4che) for SCP/SCU operations |
+| `quantivly-sdk` | Foundation library - database utilities, WAMP client, DICOM processing, job framework |
+
+Platform uses Poetry for Python packages, Flyway for DB migrations, and pre-commit hooks (Black, isort, Ruff).
 
 **When to expect cross-repo validation**:
 - API endpoint changes in `sre-core` → check `sre-ui` consumers
