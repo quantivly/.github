@@ -929,7 +929,7 @@ async def call_claude_with_mcp(
 
             # Conversation loop to handle tool use
             iteration = 0
-            max_iterations = 10  # Prevent infinite loops
+            max_iterations = 20  # Prevent infinite loops (increased for multi-MCP)
 
             while iteration < max_iterations:
                 iteration += 1
