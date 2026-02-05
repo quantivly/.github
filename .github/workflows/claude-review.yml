@@ -167,8 +167,7 @@ jobs:
           track_progress: true
           # Auto-approve MCP servers from .mcp.json
           settings: '{"enableAllProjectMcpServers": true}'
-          # Install Linear plugin for issue tracking integration
-          plugins: linear@claude-plugins-official
+          # Linear integration is via MCP server (.mcp.json), not via plugin
           # Allow tools for PR review:
           # - Action's built-in GitHub tools (inline comments, PR operations)
           # - Linear MCP tools (issue context, requirements) via .mcp.json
