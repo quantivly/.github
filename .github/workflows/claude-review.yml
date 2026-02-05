@@ -146,15 +146,13 @@ jobs:
             }
             core.setOutput('custom', instructions);
 
-      - name: Create MCP config file
+      - name: Create MCP config for Linear
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
-          # Build MCP config with proper authentication
+          # Create .mcp.json in repo root for Claude Code to auto-detect
           # Linear MCP requires Bearer token in Authorization header
-          # Only include Linear MCP if API key is available
           if [ -n "$LINEAR_API_KEY" ]; then
-            # Use printf to avoid heredoc indentation issues
             printf '%s\n' '{
               "mcpServers": {
                 "linear": {
@@ -165,10 +163,10 @@ jobs:
                   }
                 }
               }
-            }' > /tmp/mcp-config.json
+            }' > .mcp.json
+            echo "Created .mcp.json with Linear MCP server"
           else
-            # Empty config if no Linear API key
-            echo '{"mcpServers": {}}' > /tmp/mcp-config.json
+            echo "LINEAR_API_KEY not set, skipping Linear MCP configuration"
           fi
 
       - name: Run Claude PR Review
@@ -177,19 +175,20 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           track_progress: true
+          # Auto-approve MCP servers from .mcp.json
+          settings: '{"enableAllProjectMcpServers": true}'
           # TODO: Re-enable plugins once installation issues are resolved
           # plugins: |
           #   pr-review-toolkit@claude-plugins-official
           #   superpowers@claude-plugins-official
           # Allow tools for PR review:
           # - Action's built-in GitHub tools (inline comments, PR operations)
-          # - Linear MCP tools (issue context, requirements) via mcp-config
+          # - Linear MCP tools (issue context, requirements) via .mcp.json
           # - gh CLI for PR content, metadata, and cross-repo access
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
             --allowedTools "mcp__github_inline_comment__*,mcp__github_comment__*,mcp__linear__*,Bash(gh pr *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
-            --mcp-config /tmp/mcp-config.json
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
