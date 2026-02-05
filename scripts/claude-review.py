@@ -62,10 +62,16 @@ GITHUB_TOOL_PREFIX = "github_"  # Namespace to distinguish from Linear tools
 # GitHub MCP tools to expose (whitelist for security and token efficiency)
 # Only include tools needed for cross-repository code context
 GITHUB_ESSENTIAL_TOOLS = {
+    # File operations
     "get_file_contents",  # Read files from related repos
     "search_code",  # Search for code patterns across repos
+    # Commit context
     "get_commit",  # Get commit details
     "list_commits",  # List commits for context
+    # PR context (cross-repo)
+    "get_pull_request",  # Get PR details from other repos
+    "list_pull_request_files",  # See files changed in related PRs
+    "search_pull_requests",  # Find related PRs across repos
 }
 
 
@@ -478,6 +484,9 @@ You have GitHub MCP tools (prefixed with `github_`) for fetching code from Quant
 - `github_search_code` - Search for code patterns across organization repos
 - `github_get_commit` - Get commit details for context
 - `github_list_commits` - List recent commits in a repository
+- `github_get_pull_request` - Get PR details from other repos
+- `github_list_pull_request_files` - See files changed in related PRs
+- `github_search_pull_requests` - Find related PRs across repos
 
 **When to use cross-repo context**:
 1. **`sre-core` GraphQL changes** → Check `sre-ui` queries and TypeScript types
