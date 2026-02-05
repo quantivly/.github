@@ -186,11 +186,13 @@ jobs:
           # Allow tools for PR review:
           # - GitHub MCP plugin review tools (formal reviews with inline comments)
           # - Linear MCP tools (issue context, requirements) via .mcp.json server
-          # - gh CLI for PR content, metadata, and cross-repo access
+          # - gh CLI for PR content, metadata, cross-repo access, and progress comments
+          #   NOTE: Prompt instructions forbid using gh api for posting review comments
+          #   (must use MCP tools for inline comments to get proper line positioning)
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh api repos/*/contents:*),Bash(gh api repos/*/issues/*/comments:*),Bash(gh api -X DELETE:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
