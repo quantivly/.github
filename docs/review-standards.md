@@ -297,17 +297,42 @@ Provide advisory (non-blocking) feedback if Linear issue lacks:
 When GitHub MCP tools are available, Claude can fetch code from related repositories to validate changes:
 
 ### When to Use Cross-Repo Context
-- **Component API changes** in `quantivly/sre-ui` → Check consumers in `quantivly/hub`
-- **Shared utility modifications** → Verify usage patterns in consuming repositories
-- **Type/interface changes** → Validate compatibility with dependent code
-- **API endpoint changes** in `sre-core` → Check frontend consumers
+- **API endpoint changes** in `sre-core` → Check frontend consumers in `sre-ui`
+- **Type/interface changes** in `sre-core` → Validate compatibility with `sre-ui` TypeScript types
+- **auto-conf template changes** in `platform` → Verify stack file rendering for all products
+- **SDK changes** in `platform` → Check consuming services (box, ptbi, etc.)
+- **Event bridge changes** → Validate WAMP router integration and REST API consumers
 
-### Repository Relationships
-| Source Repository | Consumers |
-|-------------------|-----------|
-| `quantivly/sre-ui` | `quantivly/hub/sre-ui` (shared components) |
-| `quantivly/sre-core` | `quantivly/sre-ui`, `quantivly/hub` (Django APIs) |
-| `quantivly/platform` | All services (infrastructure) |
+### Quantivly Repository Architecture
+
+**hub** (superproject + release management)
+- Creates manifest images with correct service versions
+- Orchestrates releases across sre-* components
+- Contains submodules: sre-core, sre-ui, sre-event-bridge, sre-postgres
+
+**sre-*** (hub components)
+| Repository | Description |
+|------------|-------------|
+| `sre-core` | Django backend - GraphQL API, business logic |
+| `sre-ui` | React + Next.js frontend - consumes sre-core APIs |
+| `sre-event-bridge` | WAMP router bridge - notifies backend via REST API |
+| `sre-postgres` | PostgreSQL database for hub |
+
+**platform** (quantivly-dockers - backbone services)
+| Component | Description |
+|-----------|-------------|
+| `auto-conf` | Stack file templates and rendering logic for all products |
+| `box` | Main data processing engine (DICOM harmonization, RIS) |
+| `ptbi` | DICOM networking (SCP/SCU operations) |
+| `quantivly-sdk` | Foundation library for all Python services |
+
+### Cross-Repo Validation Examples
+| Change In | Validate Against |
+|-----------|------------------|
+| `sre-core` GraphQL schema | `sre-ui` TypeScript types and queries |
+| `sre-core` API endpoints | `sre-ui` API client calls |
+| `platform/auto-conf` templates | Rendered stack files for hub, other products |
+| `platform/quantivly-sdk` | Services using SDK (box, ptbi) |
 
 ### Available GitHub MCP Tools
 - `github_get_file_contents` - Read specific files from any Quantivly repo

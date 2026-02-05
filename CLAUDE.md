@@ -298,21 +298,26 @@ When PR title includes Linear issue ID (format: `AAA-####`), Claude:
 Claude can fetch code from related repositories when reviewing PRs. This enables validation that changes work correctly in their consuming context.
 
 **When enabled**, Claude can:
-- Read files from other Quantivly repositories (e.g., check how `hub` uses `sre-ui` components)
+- Read files from other Quantivly repositories (e.g., check how `sre-ui` consumes `sre-core` APIs)
 - Search for code patterns across the organization
 - Validate that API contracts are maintained across repositories
 
-**Repository relationships**:
-| Source Repository | Consumers |
-|-------------------|-----------|
-| `quantivly/sre-ui` | `quantivly/hub/sre-ui` (shared components) |
-| `quantivly/sre-core` | `quantivly/sre-ui`, `quantivly/hub` (Django APIs) |
-| `quantivly/platform` | All services (infrastructure) |
+**Quantivly repository architecture**:
+
+**hub** - Superproject + release management repo that creates manifest images with correct service versions. Contains submodules: sre-core, sre-ui, sre-event-bridge, sre-postgres.
+
+| Repository | Description |
+|------------|-------------|
+| `sre-core` | Django backend - GraphQL API, business logic |
+| `sre-ui` | React + Next.js frontend - consumes sre-core APIs |
+| `sre-event-bridge` | WAMP router bridge - notifies backend via REST API |
+| `sre-postgres` | PostgreSQL database for hub |
+| `platform` | Backbone services (auto-conf, box, ptbi, quantivly-sdk) |
 
 **When to expect cross-repo validation**:
-- Changes to exported components in `sre-ui`
-- API endpoint changes in `sre-core`
-- Shared type/interface modifications
+- API endpoint changes in `sre-core` → check `sre-ui` consumers
+- Type/interface changes → validate compatibility across repos
+- `auto-conf` template changes → verify stack file rendering
 
 **Configuration**: Requires `GITHUB_MCP_TOKEN` organization secret (falls back to `GITHUB_TOKEN` if not set).
 
@@ -706,10 +711,12 @@ Use imperative mood. If no Linear issue, use descriptive summary only.
 ## Related Resources
 
 **Quantivly Repositories**:
-- [hub](https://github.com/quantivly/hub) - Healthcare analytics hub (main product)
-- [platform (quantivly-dockers)](https://github.com/quantivly/quantivly-dockers) - Complete platform with backbone services
-- [sre-core](https://github.com/quantivly/sre-core) - Django backend
-- [sre-ui](https://github.com/quantivly/sre-ui) - Next.js frontend
+- [hub](https://github.com/quantivly/hub) - Superproject + release management (creates manifest images for sre-* components)
+- [sre-core](https://github.com/quantivly/sre-core) - Django backend (GraphQL API, business logic)
+- [sre-ui](https://github.com/quantivly/sre-ui) - React + Next.js frontend (consumes sre-core APIs)
+- [sre-event-bridge](https://github.com/quantivly/sre-event-bridge) - WAMP router bridge (notifies backend via REST API)
+- [sre-postgres](https://github.com/quantivly/sre-postgres) - PostgreSQL database for hub
+- [platform (quantivly-dockers)](https://github.com/quantivly/quantivly-dockers) - Backbone services (auto-conf, box, ptbi, quantivly-sdk)
 
 **GitHub Documentation**:
 - [Creating a default community health file](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file)

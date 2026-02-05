@@ -480,15 +480,18 @@ You have GitHub MCP tools (prefixed with `github_`) for fetching code from Quant
 - `github_list_commits` - List recent commits in a repository
 
 **When to use cross-repo context**:
-1. **Component API changes** in `quantivly/sre-ui` → Check consumers in `quantivly/hub` (hub/sre-ui)
-2. **Shared utility modifications** → Verify usage patterns in consuming repositories
-3. **Type/interface changes** → Validate compatibility with dependent code
-4. **API endpoint changes** in `sre-core` → Check frontend consumers in `sre-ui`, `hub`
+1. **API endpoint changes** in `sre-core` → Check frontend consumers in `sre-ui`
+2. **Type/interface changes** in `sre-core` → Validate TypeScript types in `sre-ui`
+3. **auto-conf template changes** in `platform` → Verify stack file rendering
+4. **SDK changes** in `platform` → Check consuming services (box, ptbi)
 
-**Repository relationships in Quantivly**:
-- `quantivly/sre-ui` exports shared React components → consumed by `quantivly/hub/sre-ui`
-- `quantivly/sre-core` provides Django APIs → called by `sre-ui`, `hub`
-- `quantivly/platform` provides infrastructure → used by all services
+**Quantivly repository architecture**:
+- `hub` - Superproject + release management (creates manifest images for sre-* components)
+- `sre-core` - Django backend (GraphQL API, business logic)
+- `sre-ui` - React + Next.js frontend (consumes sre-core APIs)
+- `sre-event-bridge` - WAMP router bridge (notifies backend via REST API)
+- `sre-postgres` - PostgreSQL database for hub
+- `platform` - Backbone services (auto-conf, box, ptbi, quantivly-sdk)
 
 **Guidelines**:
 - Only access repositories within the `quantivly` organization
