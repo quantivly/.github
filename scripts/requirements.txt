@@ -1,0 +1,5 @@
+# Dependencies for claude-review.py
+anthropic>=0.77.0
+pygithub==2.4.0
+requests==2.32.0
+mcp>=1.1.0
