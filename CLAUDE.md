@@ -402,10 +402,11 @@ Run: Automatically on PR push
 
 ### Implementation Details
 
-**Architecture**: Reusable workflow pattern
+**Architecture**: Reusable workflow pattern using official GitHub Action
 - **Central workflow**: `quantivly/.github/.github/workflows/claude-review.yml`
 - **Caller workflows**: Minimal files in each repository's `.github/workflows/` directory
 - **Secrets**: Automatically inherited from organization secrets using `secrets: inherit`
+- **Action**: [`anthropics/claude-code-action@v1`](https://github.com/anthropics/claude-code-action)
 - **Deployment**: See [Deploying Claude Review](docs/deploying-claude-review.md)
 
 **GitHub App "Claude"**: Custom identity for reviews
@@ -419,17 +420,19 @@ Run: Automatically on PR push
 - Triggers on `issue_comment` event with `@claude` pattern (direct) or `workflow_call` (reusable)
 - Validates commenter permissions (org member or collaborator)
 - Generates GitHub App token for posting as Claude[bot]
-- Calls Python orchestration script
+- Uses `anthropics/claude-code-action@v1` with plugins
 
-**Script**: `scripts/claude-review.py`
-- Fetches PR context via GitHub API
-- Fetches Linear context via MCP (read-only, dynamic)
-- Reads repository CLAUDE.md for guidelines
-- Calls Claude API (Sonnet 4.5)
-- Parses structured response (JSON inline comments + markdown summary)
-- Posts formal GitHub review with inline comments on specific lines
+**Plugins**:
+- `pr-review-toolkit@claude-plugins-official` - Specialized review agents (security, silent failures, type design)
+- `superpowers@claude-plugins-official` - Enhanced review workflow (verification, multi-pass)
 
-**Cost**: ~$0.50-$1.00 per review (covered by organization)
+**Features**:
+- Inline comments via `mcp__github_inline_comment__create_inline_comment`
+- Progress tracking with checkboxes
+- Linear MCP integration for requirement validation
+- Custom reviewer instructions from `@claude` comments
+
+**Cost**: ~$0.60-$0.90 per review (covered by organization)
 
 **Security**: All API keys stored in organization secrets, passed via environment variables
 
