@@ -146,35 +146,22 @@ jobs:
             }
             core.setOutput('custom', instructions);
 
-      - name: Create MCP config for Linear
-        if: ${{ secrets.LINEAR_API_KEY != '' }}
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-        run: |
-          # Create .mcp.json with actual API key (shell expands the variable)
-          # Using printf to avoid echo interpretation issues
-          printf '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer %s"}}}}' "$LINEAR_API_KEY" > .mcp.json
-          echo "Created .mcp.json with Linear MCP server configuration"
-
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
         env:
-          # Linear plugin reads this env var for API authentication
+          # Linear plugin uses this env var for API authentication
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           track_progress: true
-          # Auto-approve MCP servers from .mcp.json
-          settings: '{"enableAllProjectMcpServers": true}'
           # Add official plugin marketplace (not pre-configured in GitHub Actions)
           plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
-          # Linear plugin provides domain knowledge + tools (uses LINEAR_API_KEY env var)
-          # MCP config (.mcp.json) provides direct Linear API access as fallback
+          # Linear plugin provides MCP tools + domain knowledge
           plugins: linear@claude-plugins-official
           # Allow tools for PR review:
           # - Action's built-in GitHub tools (inline comments, PR operations)
-          # - Linear MCP tools (issue context, requirements) via .mcp.json
+          # - Linear MCP tools (issue context, requirements) via plugin
           # - gh CLI for PR content, metadata, and cross-repo access
           # - File tools for reading codebase
           # - git for commit history context
