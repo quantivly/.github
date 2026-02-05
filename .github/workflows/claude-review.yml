@@ -27,9 +27,12 @@ permissions:
 
 jobs:
   claude-review:
+    # Run on workflow_call (caller already filtered) or direct PR comments from humans
     if: |
       github.event_name == 'workflow_call' ||
-      (github.event.issue.pull_request && contains(github.event.comment.body, '@claude'))
+      (github.event.issue.pull_request &&
+       contains(github.event.comment.body, '@claude') &&
+       github.event.comment.user.type != 'Bot')
 
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -169,18 +172,6 @@ jobs:
             echo '{"mcpServers": {}}' > /tmp/mcp-config.json
           fi
 
-      - name: Post review started
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: '🤖 Claude review started... This typically takes 2-5 minutes.\n\n_Analyzing code for security, logic errors, code quality, testing, and performance._'
-            });
-
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
         with:
@@ -264,7 +255,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `❌ Claude review failed. Check [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nRetry by commenting \`@claude\`.`
+              body: `❌ Claude review failed. Check [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nTo retry, post a new comment mentioning Claude.`
             });
 
       - name: Report usage metrics

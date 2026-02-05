@@ -16,10 +16,11 @@ permissions:
 
 jobs:
   claude-review:
-    # Only run on PR comments that mention "@claude" anywhere
+    # Only run on PR comments that mention "@claude" from human users (not bots)
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@claude')
+      contains(github.event.comment.body, '@claude') &&
+      github.event.comment.user.type != 'Bot'
 
     # Call the centralized reusable workflow from the .github organization repository
     uses: quantivly/.github/.github/workflows/claude-review.yml@master
