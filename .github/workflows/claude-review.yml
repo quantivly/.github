@@ -167,6 +167,8 @@ jobs:
           track_progress: true
           # Auto-approve MCP servers from .mcp.json
           settings: '{"enableAllProjectMcpServers": true}'
+          # Add official plugin marketplace (not pre-configured in GitHub Actions)
+          plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
           # Linear plugin for issue context (requires LINEAR_API_KEY env var)
           plugins: linear@claude-plugins-official
           # Allow tools for PR review:
