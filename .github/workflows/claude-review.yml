@@ -146,6 +146,17 @@ jobs:
             }
             core.setOutput('custom', instructions);
 
+      - name: Create MCP config for Linear
+        if: ${{ secrets.LINEAR_API_KEY != '' }}
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          # Create .mcp.json with explicit auth headers for Linear MCP server
+          # The Linear plugin provides tools, but GitHub Actions needs explicit Bearer auth
+          # (locally, Claude Code auto-injects auth from env vars)
+          printf '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer %s"}}}}' "$LINEAR_API_KEY" > .mcp.json
+          echo "Created .mcp.json with Linear MCP server auth configuration"
+
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
         env:
@@ -157,8 +168,12 @@ jobs:
           track_progress: true
           # Add official plugin marketplace (not pre-configured in GitHub Actions)
           plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
-          # Linear plugin provides MCP tools + domain knowledge
+          # Linear plugin provides tools + domain knowledge
+          # .mcp.json provides explicit auth headers needed in GitHub Actions
+          # (locally, Claude Code auto-injects auth from LINEAR_API_KEY env var)
           plugins: linear@claude-plugins-official
+          # Enable MCP servers from .mcp.json (provides auth that plugin config lacks)
+          settings: '{"enableAllProjectMcpServers": true}'
           # Allow tools for PR review:
           # - Action's built-in GitHub tools (inline comments, PR operations)
           # - Linear MCP tools (issue context, requirements) via plugin
