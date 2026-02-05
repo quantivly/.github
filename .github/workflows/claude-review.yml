@@ -147,7 +147,7 @@ jobs:
             core.setOutput('custom', instructions);
 
       - name: Create MCP config for Linear
-        if: env.LINEAR_API_KEY != ''
+        if: ${{ secrets.LINEAR_API_KEY != '' }}
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
@@ -159,7 +159,7 @@ jobs:
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
         env:
-          # Pass Linear API key as environment variable for MCP server
+          # Linear plugin reads this env var for API authentication
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -169,7 +169,8 @@ jobs:
           settings: '{"enableAllProjectMcpServers": true}'
           # Add official plugin marketplace (not pre-configured in GitHub Actions)
           plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
-          # Linear plugin for issue context (requires LINEAR_API_KEY env var)
+          # Linear plugin provides domain knowledge + tools (uses LINEAR_API_KEY env var)
+          # MCP config (.mcp.json) provides direct Linear API access as fallback
           plugins: linear@claude-plugins-official
           # Allow tools for PR review:
           # - Action's built-in GitHub tools (inline comments, PR operations)
