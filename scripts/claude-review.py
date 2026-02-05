@@ -46,6 +46,7 @@ except ImportError:
 # Constants
 MAX_DIFF_LINES = 2000  # Limit diff size to control token usage
 MAX_FILE_CONTENT_LINES = 500  # Limit individual file content
+MAX_INSTRUCTION_LENGTH = 2000  # Limit reviewer instructions to prevent prompt injection
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 MAX_TOKENS = 5000
 
@@ -54,6 +55,62 @@ def extract_linear_id(pr_title: str) -> str | None:
     """Extract Linear issue ID from PR title (format: AAA-#### ...)."""
     match = re.match(r"^([A-Z]+-\d+)", pr_title)
     return match.group(1) if match else None
+
+
+def extract_reviewer_instructions(comment_body: str) -> str:
+    """
+    Extract custom reviewer instructions from the @claude comment.
+
+    Handles various comment formats:
+    - "@claude" -> returns ""
+    - "@claude review" -> returns ""
+    - "@claude focus on security" -> returns "focus on security"
+    - "@claude, please check for N+1 queries" -> returns "please check for N+1 queries"
+    - "Hey @claude can you look at the error handling?" -> returns "can you look at the error handling?"
+
+    Security:
+    - Truncates to MAX_INSTRUCTION_LENGTH to prevent prompt stuffing
+    - Does not execute or eval content (just string inclusion in prompt)
+
+    Args:
+        comment_body: The full comment body from GitHub
+
+    Returns:
+        Extracted instructions (may be empty string if only "@claude" or similar)
+    """
+    if not comment_body:
+        return ""
+
+    # Find @claude mention and extract everything after it
+    # Case-insensitive match for @claude
+    match = re.search(r"@claude\b[,:]?\s*(.*)", comment_body, re.IGNORECASE | re.DOTALL)
+
+    if not match:
+        return ""
+
+    instructions = match.group(1).strip()
+
+    # Filter out generic trigger words that aren't real instructions
+    generic_triggers = {
+        "",
+        "review",
+        "please review",
+        "review this",
+        "please review this",
+        "review this pr",
+        "please review this pr",
+        "check this",
+        "please check this",
+    }
+
+    if instructions.lower() in generic_triggers:
+        return ""
+
+    # Truncate to prevent prompt stuffing
+    if len(instructions) > MAX_INSTRUCTION_LENGTH:
+        instructions = instructions[:MAX_INSTRUCTION_LENGTH] + "... (truncated)"
+
+    return instructions
 
 
 def read_claude_md(repo_path: Path) -> str:
@@ -292,6 +349,7 @@ def build_review_prompt(
     claude_md: str,
     diff: str,
     has_linear_tools: bool = False,
+    reviewer_instructions: str = "",
 ) -> tuple[str, str]:
     """
     Construct comprehensive review prompt with static and dynamic content.
@@ -531,12 +589,25 @@ Suggested approach:
 No Linear issue ID found in PR title. Proceeding with code review without requirement validation.
 """
 
+    # Build reviewer instructions section if provided
+    instructions_section = ""
+    if reviewer_instructions:
+        instructions_section = f"""
+# Reviewer Instructions
+
+The reviewer who triggered this review provided the following specific instructions:
+
+> {reviewer_instructions}
+
+**Please prioritize these instructions** in addition to the standard review criteria above.
+"""
+
     # Build dynamic content (not cacheable - changes for each PR)
     dynamic_content = f"""# PR Context
 {pr_section}
 
 {linear_section}
-
+{instructions_section}
 # Code Changes
 ```diff
 {diff}
@@ -1006,10 +1077,15 @@ async def async_main(args: argparse.Namespace) -> int:
         else:
             print("⚠️  No LINEAR_API_KEY, Linear MCP will not be available")
 
+        # Extract reviewer instructions from comment body
+        reviewer_instructions = extract_reviewer_instructions(args.comment_body)
+        if reviewer_instructions:
+            print(f"📋 Reviewer instructions: {reviewer_instructions[:100]}{'...' if len(reviewer_instructions) > 100 else ''}")
+
         # Build review prompt with caching optimization
         print("📝 Building review prompt...")
         static_content, dynamic_content = build_review_prompt(
-            pr, files, linear_id, claude_md, full_diff, has_linear_tools
+            pr, files, linear_id, claude_md, full_diff, has_linear_tools, reviewer_instructions
         )
 
         # Call Claude API with MCP integration and prompt caching
@@ -1045,6 +1121,11 @@ def main() -> int:
     parser.add_argument("--repo-name", required=True)
     parser.add_argument("--comment-id", required=True)
     parser.add_argument("--commenter", required=True)
+    parser.add_argument(
+        "--comment-body",
+        default="",
+        help="Full comment body for extracting reviewer instructions",
+    )
     args = parser.parse_args()
 
     # Run async main
