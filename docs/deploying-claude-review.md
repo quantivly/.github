@@ -46,7 +46,7 @@ The review system was migrated from a custom Python script to the official `anth
 
 4. **Repository permissions**:
    - Caller must be org member or repo collaborator with write access
-   - Workflow must have permissions: `contents: read`, `issues: write`, `pull-requests: write`, `id-token: write`
+   - Workflow must have permissions: `contents: read`, `issues: write`, `pull-requests: write`
 
 5. **`.github` repository access enabled** (needs verification):
    - Navigate to Settings → Actions → General in the `.github` repository
@@ -145,7 +145,6 @@ Add instructions after `@claude` in your comment:
 1. Caller workflow not merged to default branch
 2. Syntax error in workflow file
 3. Repository doesn't have Actions enabled
-4. Missing `id-token: write` permission (new in v2.0)
 
 **Solution**:
 ```bash
@@ -153,9 +152,6 @@ Add instructions after `@claude` in your comment:
 git checkout master
 git pull origin master
 cat .github/workflows/claude-review.yml
-
-# Ensure permissions include id-token
-grep -A 5 "permissions:" .github/workflows/claude-review.yml
 
 # Check for YAML syntax errors
 yamllint .github/workflows/claude-review.yml
