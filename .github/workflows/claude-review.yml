@@ -171,20 +171,23 @@ jobs:
           track_progress: true
           # Add official plugin marketplace (not pre-configured in GitHub Actions)
           plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
-          # Linear plugin provides tools + domain knowledge
-          # .mcp.json provides explicit auth headers needed in GitHub Actions
-          # (locally, Claude Code auto-injects auth from LINEAR_API_KEY env var)
-          plugins: linear@claude-plugins-official
+          # Plugins:
+          # - linear: Issue context and requirements validation
+          # - github: Formal review tools (pull_request_review_write, add_comment_to_pending_review)
+          # Note: .mcp.json provides explicit auth headers needed for Linear in GitHub Actions
+          plugins: |
+            linear@claude-plugins-official
+            github@claude-plugins-official
           # Enable MCP servers from .mcp.json (provides auth that plugin config lacks)
           settings: '{"enableAllProjectMcpServers": true}'
           # Allow tools for PR review:
-          # - Action's built-in GitHub tools (inline comments, PR operations)
+          # - GitHub MCP plugin review tools (formal reviews with inline comments)
           # - Linear MCP tools (issue context, requirements) via plugin
           # - gh CLI for PR content, metadata, and cross-repo access
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__*,mcp__github_comment__*,mcp__linear__*,Bash(gh pr *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
+            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__plugin_linear_linear__*,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
@@ -194,6 +197,49 @@ jobs:
             ## Your Role
 
             You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
+
+            ## Review Workflow (CRITICAL - Follow These Steps Exactly)
+
+            You MUST post your review as an actual GitHub review event, NOT a plain comment.
+
+            **Step 1: Create Pending Review**
+            Use `mcp__plugin_github_github__pull_request_review_write` with:
+            - method: "create"
+            - owner: "${{ github.repository_owner }}"
+            - repo: "${{ github.event.repository.name }}"
+            - pullNumber: ${{ github.event.issue.number }}
+            (Do NOT include the "event" parameter yet - this keeps the review pending)
+
+            **Step 2: Add Inline Comments**
+            For each specific issue on a line, use `mcp__plugin_github_github__add_comment_to_pending_review`:
+            - owner, repo, pullNumber: same as above
+            - path: file path relative to repo root
+            - body: Your comment with severity prefix (e.g., "🚨 **[CRITICAL]** SQL injection vulnerability...")
+            - line: The line number in the new version (right side of diff)
+            - side: "RIGHT" (comment on new code)
+            - subjectType: "LINE"
+
+            Only use inline comments for issues on specific lines. General observations go in the review summary.
+
+            **Step 3: Submit the Review**
+            Use `mcp__plugin_github_github__pull_request_review_write` with:
+            - method: "submit_pending"
+            - owner, repo, pullNumber: same as above
+            - event: Choose based on findings:
+              - "REQUEST_CHANGES": Has CRITICAL issues that must be fixed
+              - "COMMENT": Has HIGH issues or needs clarification
+              - "APPROVE": No critical/high issues, only suggestions
+            - body: Your review summary (see Output Format below)
+
+            **Step 4: Clean Up Tracking Comment**
+            After submitting the review, delete the progress tracking comment:
+            ```bash
+            COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+              --jq '.[] | select(.user.login == "claude[bot]" or .user.login == "github-actions[bot]") | select(.body | startswith("**Claude")) | .id' | head -1)
+            if [ -n "$COMMENT_ID" ]; then
+              gh api -X DELETE repos/${{ github.repository }}/issues/comments/$COMMENT_ID
+            fi
+            ```
 
             ## Quantivly Architecture
 
@@ -256,16 +302,32 @@ jobs:
 
             Extra scrutiny for PHI handling, audit logging, access controls, and HIPAA compliance.
 
-            ## Output
+            ## Output Format
 
-            Use inline comments via `mcp__github_inline_comment__create_inline_comment` for specific issues.
-            Post a summary comment with overall assessment and recommendation (APPROVE/REQUEST_CHANGES/COMMENT).
+            Your review summary (the `body` parameter when submitting the review) should be concise:
 
-            Use severity labels: **[CRITICAL]**, **[HIGH]**, **[Suggestion]**
-
-            End summary with:
             ---
-            <sub>Triggered by @${{ github.event.comment.user.login }} | Powered by Claude Code</sub>
+
+            **Summary**: [1-2 sentences: what the PR does]
+
+            **Linear**: [Issue ID] - [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
+
+            **Issues**: [X critical, Y high, Z suggestions] — see inline comments
+
+            **Highlights**:
+            - ✅ [Notable good practice]
+            - ✅ [Another positive]
+
+            ---
+            <sub>@${{ github.event.comment.user.login }} · [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+
+            ---
+
+            **IMPORTANT**: Keep the summary SHORT. Details belong in inline comments, not the summary.
+            Use these severity emojis in inline comments:
+            - 🚨 **[CRITICAL]** - Security, data loss, must fix
+            - ⚠️ **[HIGH]** - Bugs, logic errors, should fix
+            - 💡 **[Suggestion]** - Improvements, nice to have
 
       - name: Post error on failure
         if: failure()
