@@ -341,6 +341,9 @@ User-facing application providing analytics, recommendations, and plugins:
 - `github_search_code` - Search for code patterns across organization repos
 - `github_get_commit` - Get commit details for context
 - `github_list_commits` - List recent commits in a repository
+- `github_get_pull_request` - Get PR details from other repos
+- `github_list_pull_request_files` - See files changed in related PRs
+- `github_search_pull_requests` - Find related PRs across repos
 
 ### Guidelines
 - Only access repositories within the `quantivly` organization
