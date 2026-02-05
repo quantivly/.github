@@ -14,6 +14,9 @@ on:
       LINEAR_API_KEY:
         required: false
         description: Linear API key for issue context retrieval
+      GH_MCP_TOKEN:
+        required: false
+        description: GitHub token for cross-repository MCP access (falls back to GITHUB_TOKEN)
       CLAUDE_APP_PRIVATE_KEY:
         required: false
         description: GitHub App private key for posting reviews as Claude[bot]
@@ -120,6 +123,46 @@ jobs:
             core.setOutput('linear_id', match ? match[1] : '');
             console.log(match ? `Linear issue: ${match[1]}` : 'No Linear issue ID in PR title');
 
+      - name: Extract custom instructions
+        id: instructions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.comment.body;
+            const match = body.match(/@claude\b[,:]?\s*(.*)/is);
+            if (!match) {
+              core.setOutput('custom', '');
+              return;
+            }
+            let instructions = match[1].trim();
+            const generic = ['', 'review', 'please review', 'review this', 'please review this', 'review this pr', 'please review this pr'];
+            if (generic.includes(instructions.toLowerCase())) {
+              core.setOutput('custom', '');
+              return;
+            }
+            // Truncate to prevent prompt stuffing
+            if (instructions.length > 2000) {
+              instructions = instructions.substring(0, 2000) + '... (truncated)';
+            }
+            core.setOutput('custom', instructions);
+
+      - name: Create MCP config file
+        run: |
+          cat > /tmp/mcp-config.json << 'EOF'
+          {
+            "mcpServers": {
+              "linear": {
+                "type": "url",
+                "url": "https://mcp.linear.app/mcp"
+              },
+              "github": {
+                "type": "url",
+                "url": "https://api.githubcopilot.com/mcp/"
+              }
+            }
+          }
+          EOF
+
       - name: Post review started
         uses: actions/github-script@v7
         with:
@@ -134,20 +177,31 @@ jobs:
 
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          GH_MCP_TOKEN: ${{ secrets.GH_MCP_TOKEN || secrets.GITHUB_TOKEN }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          # Allow tools for PR review
+          track_progress: true
+          plugins: |
+            pr-review-toolkit@claude-plugins-official
+            superpowers@claude-plugins-official
+          # Allow tools for PR review:
           # - MCP tools for GitHub operations (inline comments, regular comments)
+          # - MCP tools for Linear (issue context, requirements)
+          # - MCP tools for GitHub cross-repo (file contents, code search)
           # - gh CLI for PR content and metadata
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__*,mcp__github_comment__*,Bash(gh pr *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
+            --allowedTools "mcp__github_inline_comment__*,mcp__github_comment__*,mcp__linear__*,mcp__github__get_file_contents,mcp__github__search_code,mcp__github__get_commit,mcp__github__list_commits,mcp__github__get_pull_request,mcp__github__list_pull_request_files,mcp__github__search_pull_requests,Bash(gh pr *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
+            --mcp-config /tmp/mcp-config.json
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
             LINEAR ISSUE: ${{ steps.linear.outputs.linear_id || 'Not specified' }}
+            CUSTOM FOCUS: ${{ steps.instructions.outputs.custom || 'None - standard review' }}
 
             ## Your Role
 
@@ -157,6 +211,21 @@ jobs:
 
             Read `.github-org/docs/review-standards.md` for severity levels, checklists, and output format.
             Also read the repository's `CLAUDE.md` if it exists.
+
+            ## Linear Integration
+
+            If a Linear issue ID is provided, use the Linear MCP tools to:
+            1. Fetch the issue description and acceptance criteria
+            2. Review any comments for additional requirements
+            3. Validate the PR implementation aligns with requirements
+            4. Flag any gaps between requirements and implementation
+
+            ## Cross-Repository Validation
+
+            For changes to shared/exported code, use GitHub MCP tools to check consuming repositories:
+            - `sre-core` GraphQL changes → check `sre-ui` TypeScript types
+            - `sre-sdk` changes → check `sre-core`, `sre-event-bridge`
+            - `quantivly-sdk` changes → check `box`, `ptbi`
 
             ## Review Priorities
 
@@ -193,3 +262,20 @@ jobs:
               issue_number: context.issue.number,
               body: `❌ Claude review failed. Check [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nRetry by commenting \`@claude\`.`
             });
+
+      - name: Report usage metrics
+        if: always()
+        env:
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          TRIGGERED_BY: ${{ github.event.comment.user.login }}
+          LINEAR_ID: ${{ steps.linear.outputs.linear_id }}
+          CUSTOM_INSTRUCTIONS: ${{ steps.instructions.outputs.custom }}
+        run: |
+          echo "### Claude Review Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- PR: #${PR_NUMBER}" >> $GITHUB_STEP_SUMMARY
+          echo "- Repository: ${REPO}" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: @${TRIGGERED_BY}" >> $GITHUB_STEP_SUMMARY
+          echo "- Linear Issue: ${LINEAR_ID:-Not specified}" >> $GITHUB_STEP_SUMMARY
+          echo "- Custom Focus: ${CUSTOM_INSTRUCTIONS:-Standard review}" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
