@@ -252,18 +252,27 @@ Quantivly has two complementary Claude review systems that use the same [review 
    ```
    Hey @claude, can you review this?
    ```
-   ```
-   Thanks! @claude please check this out
-   ```
 
-3. **Wait 2-5 minutes** for review to complete
+3. **Optionally include custom instructions** for focused reviews:
+   ```
+   @claude focus on security and HIPAA compliance
+   ```
+   ```
+   @claude this is a performance-critical path, please check for N+1 queries
+   ```
+   ```
+   @claude please pay attention to the error handling in the retry logic
+   ```
+   Custom instructions are included in Claude's prompt and prioritized during review.
 
-4. **Address feedback**:
+4. **Wait 2-5 minutes** for review to complete
+
+5. **Address feedback**:
    - Fix **CRITICAL** issues (security, data loss)
    - Fix **HIGH** issues (bugs, logic errors)
    - Consider **Suggestions** (use judgment)
 
-5. **Request human review** after addressing critical feedback
+6. **Request human review** after addressing critical feedback
 
 ### What Claude Reviews
 
