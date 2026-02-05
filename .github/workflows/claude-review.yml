@@ -163,8 +163,10 @@ jobs:
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
         env:
-          # Linear plugin uses this env var for API authentication
+          # Linear MCP server (via .mcp.json) uses env var for API authentication
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          # GitHub plugin reads from GH_TOKEN env var (using GH_ prefix since GitHub reserves GITHUB_)
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -172,22 +174,20 @@ jobs:
           # Add official plugin marketplace (not pre-configured in GitHub Actions)
           plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
           # Plugins:
-          # - linear: Issue context and requirements validation
           # - github: Formal review tools (pull_request_review_write, add_comment_to_pending_review)
-          # Note: .mcp.json provides explicit auth headers needed for Linear in GitHub Actions
-          plugins: |
-            linear@claude-plugins-official
-            github@claude-plugins-official
+          # Note: Linear MCP is provided via .mcp.json (not plugin) since GitHub Actions
+          # needs explicit auth headers that plugins cannot provide
+          plugins: github@claude-plugins-official
           # Enable MCP servers from .mcp.json (provides auth that plugin config lacks)
           settings: '{"enableAllProjectMcpServers": true}'
           # Allow tools for PR review:
           # - GitHub MCP plugin review tools (formal reviews with inline comments)
-          # - Linear MCP tools (issue context, requirements) via plugin
+          # - Linear MCP tools (issue context, requirements) via .mcp.json server
           # - gh CLI for PR content, metadata, and cross-repo access
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__plugin_linear_linear__*,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
+            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
