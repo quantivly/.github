@@ -17,13 +17,22 @@ This maintains a single source of truth while allowing easy deployment to any re
 1. **Organization secrets configured** (already done):
    - `ANTHROPIC_API_KEY` - Claude API access
    - `LINEAR_API_KEY` - Linear issue context
+   - `CLAUDE_APP_PRIVATE_KEY` - GitHub App private key for Claude[bot] identity
    - `GITHUB_TOKEN` - Automatically provided by GitHub Actions
 
-2. **Repository permissions**:
+2. **Organization variables configured** (already done):
+   - `CLAUDE_APP_ID` - GitHub App ID for Claude[bot] identity
+
+3. **GitHub App "Claude" installed** (already done):
+   - App provides custom identity so reviews appear as "Claude[bot]" instead of "github-actions[bot]"
+   - App needs permissions: Contents (Read), Issues (Write), Pull requests (Write)
+   - App must be installed to the organization with access to all repositories
+
+4. **Repository permissions**:
    - Caller must be org member or repo collaborator with write access
    - Workflow must have permissions: `contents: read`, `issues: write`, `pull-requests: write`
 
-3. **`.github` repository access enabled** (needs verification):
+5. **`.github` repository access enabled** (needs verification):
    - Navigate to Settings → Actions → General in the `.github` repository
    - Under "Access", ensure "Accessible from repositories in the 'quantivly' organization" is selected
 

@@ -15,6 +15,8 @@ Quantivly uses Claude (Anthropic's AI) to provide automated, high-quality code r
 - 📋 **Linear integration** - Validates alignment with issue requirements
 - 🎯 **Multi-focus analysis** - Security, logic, quality, testing, performance
 - 🤖 **Consistent standards** - Follows repository CLAUDE.md conventions
+- 💬 **Inline comments** - Comments attached directly to specific lines in the diff
+- ✅ **Formal reviews** - Proper GitHub review events (APPROVE/REQUEST_CHANGES)
 
 ---
 
@@ -57,20 +59,30 @@ That's it! Claude will:
 
 ### 3. Address Feedback
 
-Claude's review will have these sections:
+Claude posts a **formal GitHub review** (not just a comment), which means:
 
-- **Summary** - High-level assessment
-- **Alignment with Linear Requirements** - How well PR meets the issue specs
-- **Critical Issues** - Must fix before merge (security, bugs)
-- **Suggestions** - Nice-to-have improvements
-- **Positive Observations** - What you did well
-- **Testing Assessment** - Test coverage evaluation
-- **Recommendation** - APPROVE / REQUEST_CHANGES / COMMENT
+- **Review event**: Appears as APPROVE, REQUEST_CHANGES, or COMMENT in the PR's review section
+- **Inline comments**: Specific feedback attached directly to lines in the diff
+- **Identity**: Posted as "Claude[bot]" (distinct from other GitHub Actions)
 
-**Priority**:
+**Review Structure**:
+
+1. **Inline Comments** - Attached to specific lines in your code
+   - CRITICAL severity - Security vulnerabilities, data loss risks (red flags)
+   - HIGH severity - Logic errors, broken functionality
+   - SUGGESTION - Nice-to-have improvements
+
+2. **Summary Section** - High-level assessment including:
+   - Overview of the PR
+   - Alignment with Linear requirements
+   - Issues summary (counts by severity)
+   - Positive observations
+   - Testing assessment
+
+**Priority for Addressing Feedback**:
 1. Fix all **CRITICAL** issues (security vulnerabilities, data loss risks)
 2. Fix **HIGH** severity issues (logic errors, broken functionality)
-3. Consider **Suggestions** (use your judgment)
+3. Consider **SUGGESTION** items (use your judgment)
 4. Re-request review if you made significant changes
 
 ---

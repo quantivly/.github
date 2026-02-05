@@ -235,6 +235,13 @@ Quantivly has two complementary Claude review systems that use the same [review 
 
 **Who**: Available to organization members and repository collaborators with write access
 
+**Identity**: Reviews are posted by "Claude[bot]" (custom GitHub App) with formal review events
+
+**Features**:
+- **Inline comments**: Feedback attached directly to specific lines in the diff
+- **Formal reviews**: Proper APPROVE/REQUEST_CHANGES/COMMENT events (not just comments)
+- **Cross-repo context**: Can fetch code from related Quantivly repositories
+
 ### How to Use
 
 1. **Create PR with Linear ID in title**:
@@ -401,17 +408,26 @@ Run: Automatically on PR push
 - **Secrets**: Automatically inherited from organization secrets using `secrets: inherit`
 - **Deployment**: See [Deploying Claude Review](docs/deploying-claude-review.md)
 
+**GitHub App "Claude"**: Custom identity for reviews
+- **Name**: Claude (appears as "Claude[bot]")
+- **Purpose**: Reviews appear as distinct identity, not "github-actions[bot]"
+- **Permissions**: Contents (Read), Issues (Write), Pull requests (Write)
+- **Configuration**: `CLAUDE_APP_ID` (org variable), `CLAUDE_APP_PRIVATE_KEY` (org secret)
+- **Fallback**: If App token unavailable, falls back to `GITHUB_TOKEN` (github-actions[bot])
+
 **Workflow**: `.github/workflows/claude-review.yml`
 - Triggers on `issue_comment` event with `@claude` pattern (direct) or `workflow_call` (reusable)
 - Validates commenter permissions (org member or collaborator)
+- Generates GitHub App token for posting as Claude[bot]
 - Calls Python orchestration script
 
 **Script**: `scripts/claude-review.py`
 - Fetches PR context via GitHub API
-- Fetches Linear context via GraphQL API (read-only)
+- Fetches Linear context via MCP (read-only, dynamic)
 - Reads repository CLAUDE.md for guidelines
 - Calls Claude API (Sonnet 4.5)
-- Posts structured review as PR comment
+- Parses structured response (JSON inline comments + markdown summary)
+- Posts formal GitHub review with inline comments on specific lines
 
 **Cost**: ~$0.50-$1.00 per review (covered by organization)
 

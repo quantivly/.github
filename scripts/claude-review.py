@@ -28,7 +28,7 @@ import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncGenerator
+from typing import TYPE_CHECKING, Any, AsyncGenerator, TypedDict
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -73,6 +73,217 @@ GITHUB_ESSENTIAL_TOOLS = {
     "list_pull_request_files",  # See files changed in related PRs
     "search_pull_requests",  # Find related PRs across repos
 }
+
+
+# Type definitions for parsed review structure
+class InlineComment(TypedDict):
+    """A single inline comment from Claude's review."""
+
+    path: str
+    line: int
+    body: str
+    severity: str
+
+
+class ParsedReview(TypedDict):
+    """Parsed components of Claude's review response."""
+
+    inline_comments: list[InlineComment]
+    summary: str
+    recommendation: str  # APPROVE, REQUEST_CHANGES, COMMENT
+
+
+def validate_inline_comment(comment: dict[str, Any]) -> bool:
+    """
+    Validate that an inline comment has required fields.
+
+    Args:
+        comment: Dictionary from Claude's JSON response
+
+    Returns:
+        True if comment has valid path, line, and body
+    """
+    return (
+        isinstance(comment.get("path"), str)
+        and bool(comment["path"].strip())
+        and isinstance(comment.get("line"), int)
+        and comment["line"] > 0
+        and isinstance(comment.get("body"), str)
+        and bool(comment["body"].strip())
+    )
+
+
+def parse_claude_review(review_text: str) -> ParsedReview:
+    """
+    Parse Claude's structured review into components.
+
+    Extracts the JSON inline comments block and separates it from
+    the markdown summary. Handles graceful fallback when JSON
+    parsing fails.
+
+    Args:
+        review_text: Raw review text from Claude
+
+    Returns:
+        ParsedReview with inline_comments, summary, and recommendation
+    """
+    result: ParsedReview = {
+        "inline_comments": [],
+        "summary": review_text,
+        "recommendation": "COMMENT",  # Safe default
+    }
+
+    # Extract JSON block from review text
+    # Pattern matches ```json ... ``` with inline_comments array
+    json_match = re.search(
+        r"```json\s*\n(\{[\s\S]*?\"inline_comments\"[\s\S]*?\})\s*\n```",
+        review_text,
+    )
+
+    if json_match:
+        try:
+            data = json.loads(json_match.group(1))
+
+            # Extract and validate inline comments
+            raw_comments = data.get("inline_comments", [])
+            result["inline_comments"] = [
+                InlineComment(
+                    path=c["path"],
+                    line=c["line"],
+                    body=c["body"],
+                    severity=c.get("severity", "SUGGESTION"),
+                )
+                for c in raw_comments
+                if validate_inline_comment(c)
+            ]
+
+            # Extract recommendation
+            rec = data.get("recommendation", "COMMENT")
+            if rec in ("APPROVE", "REQUEST_CHANGES", "COMMENT"):
+                result["recommendation"] = rec
+
+            # Remove JSON block from summary text
+            result["summary"] = (
+                review_text[: json_match.start()]
+                + review_text[json_match.end() :]
+            ).strip()
+
+            print(
+                f"✓ Parsed {len(result['inline_comments'])} inline comments, "
+                f"recommendation: {result['recommendation']}"
+            )
+
+        except json.JSONDecodeError as e:
+            print(f"⚠️  Failed to parse inline comments JSON: {e}")
+            # Keep summary as full text, fallback to text-based recommendation
+
+    # Fallback: extract recommendation from text if not already set
+    if result["recommendation"] == "COMMENT" and not json_match:
+        rec_match = re.search(
+            r"\*\*\[(APPROVE|REQUEST_CHANGES|COMMENT)\]\*\*", review_text
+        )
+        if rec_match:
+            result["recommendation"] = rec_match.group(1)
+
+    return result
+
+
+def build_position_map(files: list[Any]) -> dict[str, dict[int, int]]:
+    """
+    Build a mapping from (file_path, new_file_line) to diff position.
+
+    GitHub's review API uses "position" (1-indexed line within the diff),
+    not absolute line numbers. This function parses diff hunks to build
+    the mapping.
+
+    Position counting rules:
+    - Starts at 1 for the first line after @@ hunk header
+    - Increments for every line (including context, additions, deletions)
+    - Only lines in the new file (context + additions) have valid mappings
+
+    Args:
+        files: List of PyGithub PullRequestFile objects with .patch attribute
+
+    Returns:
+        Dict mapping filename -> {new_file_line_number -> diff_position}
+    """
+    position_map: dict[str, dict[int, int]] = {}
+
+    for file in files:
+        # Skip files without patches (binary files, renames without content)
+        if not file.patch:
+            continue
+
+        file_map: dict[int, int] = {}
+        position = 0
+        current_line = 0
+
+        for diff_line in file.patch.split("\n"):
+            # Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
+            if diff_line.startswith("@@"):
+                match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)", diff_line)
+                if match:
+                    # Set current line to one before the hunk start
+                    # (will be incremented on first non-deletion line)
+                    current_line = int(match.group(1)) - 1
+                position += 1
+                continue
+
+            position += 1
+
+            # Deleted lines (start with -) don't exist in new file
+            if diff_line.startswith("-"):
+                continue
+
+            # Context lines (no prefix) and additions (+) exist in new file
+            current_line += 1
+            file_map[current_line] = position
+
+        position_map[file.filename] = file_map
+
+    return position_map
+
+
+def convert_to_review_comments(
+    comments: list[InlineComment],
+    position_map: dict[str, dict[int, int]],
+) -> tuple[list[dict[str, Any]], list[InlineComment]]:
+    """
+    Convert inline comments to GitHub review API format.
+
+    GitHub's create_review() expects comments with 'path' and 'position'
+    (not line number). This function converts line numbers to positions
+    using the position map from build_position_map().
+
+    Comments that can't be mapped (line not in diff) are returned
+    separately for inclusion in the review body.
+
+    Args:
+        comments: Inline comments from Claude's review
+        position_map: Mapping from build_position_map()
+
+    Returns:
+        Tuple of (review_comments for API, unmapped_comments for body)
+    """
+    review_comments: list[dict[str, Any]] = []
+    unmapped: list[InlineComment] = []
+
+    for comment in comments:
+        path = comment["path"]
+        line = comment["line"]
+
+        # Check if we can map this comment to a diff position
+        if path in position_map and line in position_map[path]:
+            review_comments.append({
+                "path": path,
+                "position": position_map[path][line],
+                "body": comment["body"],
+            })
+        else:
+            unmapped.append(comment)
+            print(f"⚠️  Cannot map {path}:{line} to diff position")
+
+    return review_comments, unmapped
 
 
 def extract_linear_id(pr_title: str) -> str | None:
@@ -600,7 +811,37 @@ Conduct a comprehensive code review with the following priorities:
 
 # Output Format
 
-Provide your review in this exact structure:
+Provide your review in TWO parts:
+
+## Part 1: Inline Comments (JSON)
+
+Output a JSON code block with specific line-level feedback for GitHub inline comments:
+
+```json
+{
+  "inline_comments": [
+    {
+      "path": "relative/path/to/file.py",
+      "line": 123,
+      "body": "**[CRITICAL]**: SQL Injection Risk\\n\\nThe query uses string concatenation instead of parameterized queries.\\n\\n**Fix**: Use `cursor.execute(query, params)` with parameterized values.",
+      "severity": "CRITICAL"
+    }
+  ],
+  "recommendation": "REQUEST_CHANGES"
+}
+```
+
+**Guidelines for inline comments**:
+- Use exact file paths from the diff (e.g., "src/api/views.py")
+- Line numbers reference the NEW file version (right side of diff)
+- One focused issue per comment
+- Include severity: CRITICAL, HIGH, or SUGGESTION
+- Limit to 5-10 most important inline comments (focus on actionable issues)
+- Use markdown formatting in body (bold, code blocks, etc.)
+
+## Part 2: Review Summary (Markdown)
+
+After the JSON block, provide the summary in this structure:
 
 ## Summary
 [2-3 sentence overview of the PR and overall assessment]
@@ -609,26 +850,12 @@ Provide your review in this exact structure:
 [If Linear issue referenced, use tools to fetch and assess alignment]
 [If no Linear issue, state: "No Linear issue to validate against"]
 
-## Critical Issues (Must Fix Before Merge)
-[List ONLY if found. Each issue must include:]
-1. **[Category]**: [Specific description]
-   - **Location**: `file.py:123-145`
-   - **Finding**: [What is wrong]
-   - **Risk**: [Why this matters]
-   - **Fix**: [Concrete recommendation]
-   - **Severity**: CRITICAL | HIGH
+## Issues Summary
+- **CRITICAL**: [count] (detailed in inline comments above)
+- **HIGH**: [count]
+- **Suggestions**: [count]
 
-[If none found, state: "No critical issues identified"]
-
-## Suggestions (Should Consider)
-[List improvements that would enhance code quality but aren't blockers]
-1. **[Category]**: [Description]
-   - **Location**: `file.py:456`
-   - **Current**: [What exists]
-   - **Suggested**: [Alternative approach]
-   - **Benefit**: [Why this helps]
-
-[If none, state: "No significant suggestions"]
+[If no issues: "No critical issues identified"]
 
 ## Positive Observations
 [List 2-3 good patterns or practices observed]
@@ -638,11 +865,6 @@ Provide your review in this exact structure:
 - **Coverage**: [Assessment of test completeness]
 - **Edge Cases**: [Which edge cases are/aren't tested]
 - **Quality**: [Test quality observations]
-
-## Recommendation
-**[APPROVE | REQUEST_CHANGES | COMMENT]**
-
-[1-2 sentence justification]
 
 # Guidelines
 
@@ -1168,11 +1390,63 @@ def log_token_metrics(response: Any, pr_number: int, tool_call_count: int = 0) -
     return total_cost
 
 
-def post_review_comment(
+def build_review_footer(
+    commenter: str,
+    had_linear_context: bool,
+    had_github_context: bool,
+    tool_call_count: int,
+    linear_issue_data: dict[str, Any] | None,
+    review_cost: float,
+    inline_comment_count: int,
+) -> str:
+    """Build the footer section for review comments."""
+    footer_parts = [f"Triggered by @{commenter}", "Powered by Claude Sonnet 4.5"]
+
+    # Add Linear issue link if available
+    if linear_issue_data:
+        issue_id = linear_issue_data.get("id", "")
+        issue_url = f"https://linear.app/quantivly/issue/{issue_id.lower()}"
+        query_text = (
+            f"{tool_call_count} {'query' if tool_call_count == 1 else 'queries'}"
+            if tool_call_count > 0
+            else "validated"
+        )
+        footer_parts.append(f"Reviewed [{issue_id}]({issue_url}) ({query_text})")
+    elif tool_call_count > 0:
+        footer_parts.append(
+            f"Validated using {tool_call_count} "
+            f"{'query' if tool_call_count == 1 else 'queries'}"
+        )
+
+    # Indicate GitHub cross-repo context was available
+    if had_github_context:
+        footer_parts.append("Cross-repo context enabled")
+
+    # Add inline comment count
+    if inline_comment_count > 0:
+        footer_parts.append(
+            f"{inline_comment_count} inline "
+            f"{'comment' if inline_comment_count == 1 else 'comments'}"
+        )
+
+    # Add cost if available
+    if review_cost > 0:
+        footer_parts.append(f"Cost: ${review_cost:.2f}")
+
+    footer_parts.append(
+        "[Learn more](https://github.com/quantivly/.github/blob/master/"
+        "docs/claude-integration-guide.md)"
+    )
+
+    return f"<sub>{' | '.join(footer_parts)}</sub>"
+
+
+def post_formal_review(
     github: Github,
     repo_full_name: str,
     pr_number: int,
-    review_text: str,
+    parsed: ParsedReview,
+    files: list[Any],
     commenter: str,
     had_linear_context: bool = True,
     had_github_context: bool = False,
@@ -1180,21 +1454,53 @@ def post_review_comment(
     linear_issue_data: dict[str, Any] | None = None,
     review_cost: float = 0.0,
 ) -> None:
-    """Post formatted review comment to PR with MCP context status and metrics."""
+    """
+    Post formal GitHub review with inline comments.
+
+    This function posts a proper GitHub review (with APPROVE/REQUEST_CHANGES/COMMENT
+    event) instead of a simple issue comment. Inline comments are attached to
+    specific lines in the diff.
+
+    Falls back to create_issue_comment() if the formal review fails.
+
+    Args:
+        github: Authenticated PyGithub instance
+        repo_full_name: Repository in "owner/repo" format
+        pr_number: Pull request number
+        parsed: Parsed review from parse_claude_review()
+        files: List of PullRequestFile objects (for position mapping)
+        commenter: Username who triggered the review
+        had_linear_context: Whether Linear tools were available
+        had_github_context: Whether GitHub MCP tools were available
+        tool_call_count: Number of MCP tool calls made
+        linear_issue_data: Linear issue details if fetched
+        review_cost: Total cost of the review
+    """
     repo = github.get_repo(repo_full_name)
     pr = repo.get_pull(pr_number)
 
-    # Format final comment with metadata
-    comment_body = f"""## 🤖 Claude Code Review
+    # Build position map and convert inline comments
+    position_map = build_position_map(files)
+    review_comments, unmapped = convert_to_review_comments(
+        parsed["inline_comments"], position_map
+    )
 
-{review_text}
+    # Start building review body
+    body = f"## 🤖 Claude Code Review\n\n{parsed['summary']}"
 
----
-"""
+    # Add unmapped comments to body (lines not in diff)
+    if unmapped:
+        body += "\n\n---\n### Additional Comments (outside diff)\n\n"
+        for comment in unmapped:
+            severity = comment.get("severity", "SUGGESTION")
+            body += f"**{comment['path']}:{comment['line']}** [{severity}]\n\n"
+            body += f"{comment['body']}\n\n"
 
-    # Add Linear context warning if not available (keep the warning, just remove the section)
+    # Add Linear context warning if not available
     if not had_linear_context:
-        comment_body += """⚠️ **Linear Context**: Unable to fetch Linear issue context. Review performed without requirement validation.
+        body += """
+---
+⚠️ **Linear Context**: Unable to fetch Linear issue context. Review performed without requirement validation.
 
 **Possible reasons**:
 - PR title doesn't include Linear ID (format: `AAA-#### Description`)
@@ -1202,41 +1508,81 @@ def post_review_comment(
 - Issue doesn't exist or is inaccessible
 
 **Recommendation**: Verify PR title format and ensure Linear issue is linked.
-
----
 """
 
-    # Build minimalist footer with MCP context info, tool usage, and cost
-    footer_parts = [f"Triggered by @{commenter}", "Powered by Claude Sonnet 4.5"]
+    # Add footer
+    body += "\n\n---\n"
+    body += build_review_footer(
+        commenter=commenter,
+        had_linear_context=had_linear_context,
+        had_github_context=had_github_context,
+        tool_call_count=tool_call_count,
+        linear_issue_data=linear_issue_data,
+        review_cost=review_cost,
+        inline_comment_count=len(review_comments),
+    )
 
-    # Add Linear issue link if available
-    if linear_issue_data:
-        issue_id = linear_issue_data.get('id', '')
-        issue_url = f"https://linear.app/quantivly/issue/{issue_id.lower()}"
-        query_text = f"{tool_call_count} {'query' if tool_call_count == 1 else 'queries'}" if tool_call_count > 0 else "validated"
-        footer_parts.append(f"Reviewed [{issue_id}]({issue_url}) ({query_text})")
-    elif tool_call_count > 0:
-        footer_parts.append(f"Validated using {tool_call_count} {'query' if tool_call_count == 1 else 'queries'}")
-
-    # Indicate GitHub cross-repo context was available
-    if had_github_context:
-        footer_parts.append("Cross-repo context enabled")
-
-    # Add cost if available
-    if review_cost > 0:
-        footer_parts.append(f"Cost: ${review_cost:.2f}")
-
-    footer_parts.append("[Learn more](https://github.com/quantivly/.github/blob/master/docs/claude-integration-guide.md)")
-
-    comment_body += f"""<sub>{' | '.join(footer_parts)}</sub>
-"""
+    # Map recommendation to GitHub review event
+    event_map = {
+        "APPROVE": "APPROVE",
+        "REQUEST_CHANGES": "REQUEST_CHANGES",
+        "COMMENT": "COMMENT",
+    }
+    event = event_map.get(parsed["recommendation"], "COMMENT")
 
     try:
-        pr.create_issue_comment(comment_body)
-        print(f"✓ Posted review comment to PR #{pr_number}")
+        # Get the latest commit for the review
+        commits = list(pr.get_commits())
+        latest_commit = commits[-1] if commits else None
+
+        # Create the formal review
+        pr.create_review(
+            commit=latest_commit,
+            body=body,
+            event=event,
+            comments=review_comments if review_comments else None,
+        )
+        print(
+            f"✓ Posted {event} review to PR #{pr_number} with "
+            f"{len(review_comments)} inline comments"
+        )
+
     except GithubException as e:
-        print(f"❌ Failed to post comment: {e}")
-        raise
+        print(f"⚠️  Formal review failed ({e}), falling back to issue comment")
+        # Fallback: post as regular comment without inline comments
+        fallback_body = f"## 🤖 Claude Code Review\n\n{parsed['summary']}"
+
+        # Include all comments in body for fallback
+        if parsed["inline_comments"]:
+            fallback_body += "\n\n---\n### Inline Comments\n\n"
+            for comment in parsed["inline_comments"]:
+                severity = comment.get("severity", "SUGGESTION")
+                fallback_body += f"**{comment['path']}:{comment['line']}** [{severity}]\n\n"
+                fallback_body += f"{comment['body']}\n\n"
+
+        if not had_linear_context:
+            fallback_body += """
+---
+⚠️ **Linear Context**: Unable to fetch Linear issue context.
+"""
+
+        fallback_body += "\n\n---\n"
+        fallback_body += build_review_footer(
+            commenter=commenter,
+            had_linear_context=had_linear_context,
+            had_github_context=had_github_context,
+            tool_call_count=tool_call_count,
+            linear_issue_data=linear_issue_data,
+            review_cost=review_cost,
+            inline_comment_count=0,
+        )
+
+        try:
+            pr.create_issue_comment(fallback_body)
+            print(f"✓ Posted fallback comment to PR #{pr_number}")
+        except GithubException as fallback_error:
+            print(f"❌ Failed to post fallback comment: {fallback_error}")
+            raise
 
 
 async def async_main(args: argparse.Namespace) -> int:
@@ -1345,10 +1691,22 @@ async def async_main(args: argparse.Namespace) -> int:
         # Log token usage and cost metrics
         review_cost = log_token_metrics(final_response, args.pr_number, tool_call_count)
 
-        # Post review comment with MCP context status and metrics
-        post_review_comment(
-            github, repo_full_name, args.pr_number, review_text, args.commenter,
-            had_linear_context, had_github_context, tool_call_count, linear_issue_data, review_cost
+        # Parse structured response (inline comments + summary)
+        parsed = parse_claude_review(review_text)
+
+        # Post formal review with inline comments
+        post_formal_review(
+            github=github,
+            repo_full_name=repo_full_name,
+            pr_number=args.pr_number,
+            parsed=parsed,
+            files=files,
+            commenter=args.commenter,
+            had_linear_context=had_linear_context,
+            had_github_context=had_github_context,
+            tool_call_count=tool_call_count,
+            linear_issue_data=linear_issue_data,
+            review_cost=review_cost,
         )
 
         print("✅ Review completed successfully")

@@ -17,6 +17,9 @@ on:
       GH_MCP_TOKEN:
         required: false
         description: GitHub token for cross-repository context via GitHub MCP server (falls back to GITHUB_TOKEN if not provided)
+      CLAUDE_APP_PRIVATE_KEY:
+        required: false
+        description: GitHub App private key for posting reviews as Claude[bot] (falls back to GITHUB_TOKEN if not provided)
       # GITHUB_TOKEN is automatically provided by GitHub Actions and doesn't need to be defined
 
 # Note: Concurrency control is handled by the caller workflow
@@ -85,7 +88,8 @@ jobs:
         if: steps.validate.outputs.result == 'false'
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Use App token if available, fall back to GITHUB_TOKEN
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -112,6 +116,15 @@ jobs:
             scripts
           fetch-depth: 1
 
+      - name: Generate GitHub App token
+        id: app-token
+        if: vars.CLAUDE_APP_ID != '' && (secrets.CLAUDE_APP_PRIVATE_KEY != '' || github.event_name == 'workflow_call')
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.CLAUDE_APP_ID }}
+          private-key: ${{ secrets.CLAUDE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -125,7 +138,8 @@ jobs:
       - name: Post review started message
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Use App token if available, fall back to GITHUB_TOKEN
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -141,7 +155,8 @@ jobs:
           # SECURITY: All untrusted data passed via environment variables, never direct shell substitution
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use App token for posting reviews as Claude[bot], fall back to GITHUB_TOKEN
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           # GitHub MCP token for cross-repository context (falls back to GITHUB_TOKEN if not set)
           GITHUB_MCP_TOKEN: ${{ secrets.GH_MCP_TOKEN || secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
@@ -173,7 +188,8 @@ jobs:
         if: failure()
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Use App token if available, fall back to GITHUB_TOKEN
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
             const errorMessage = `❌ Claude review failed
 
