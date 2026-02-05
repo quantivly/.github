@@ -485,19 +485,21 @@ You have GitHub MCP tools (prefixed with `github_`) for fetching code from Quant
 3. **`quantivly-sdk` changes** → Check consumers: `box`, `ptbi`, `healthcheck`
 4. **`auto-conf` template changes** → Verify stack file rendering
 
-**Quantivly repository architecture** (two ecosystems with separate SDKs):
+**Quantivly repository architecture** (two-layer: platform = foundation, hub = user portal on top):
 
-*hub* (healthcare analytics product - superproject):
-- `sre-core` - Django backend (GraphQL, plugins) — depends on `sre-sdk`
+*platform* (`quantivly-dockers` repo) - Core DICOM/RIS data backbone:
+- `box` - DICOM harmonization (GE/Philips/Siemens), RIS integration — depends on `quantivly-sdk`
+- `ptbi` - DICOM networking (Python+Java/dcm4che) — depends on `quantivly-sdk`
+- `auto-conf` - Jinja2 stack generator (configures BOTH platform AND hub deployments via `modules/quantivly/sre/`)
+- `quantivly-sdk` - Python SDK for platform services
+
+*hub* (`hub` repo) - Healthcare analytics portal (builds on platform backbone):
+- `sre-core` - Django backend (GraphQL API, plugin system) — depends on `sre-sdk`
 - `sre-ui` - Next.js frontend — consumes `sre-core` GraphQL
-- `sre-event-bridge` - WAMP→REST bridge — depends on `sre-sdk`
+- `sre-event-bridge` - WAMP→REST bridge (connects to platform's WAMP router) — depends on `sre-sdk`
 - `sre-sdk` - Python SDK for hub services
 
-*platform* (quantivly-dockers - DICOM/RIS backbone):
-- `auto-conf` - Jinja2 stack generator (also generates hub deployment in `modules/quantivly/sre/`)
-- `box` - DICOM harmonization (GE/Philips/Siemens), RIS — depends on `quantivly-sdk`
-- `ptbi` - DICOM networking (Python+Java/dcm4che) — depends on `quantivly-sdk`
-- `quantivly-sdk` - Python SDK for platform services
+In production, hub integrates with platform's backbone (Keycloak auth, WAMP messaging, shared networking).
 
 **Guidelines**:
 - Only access repositories within the `quantivly` organization

@@ -305,26 +305,28 @@ When GitHub MCP tools are available, Claude can fetch code from related reposito
 
 ### Quantivly Repository Architecture
 
-Two ecosystems with separate SDKs:
+Two-layer architecture: **platform** provides the foundational data infrastructure, **hub** provides the user-facing analytics portal on top.
 
-**hub** - Healthcare analytics product (superproject)
+**platform** (`quantivly-dockers` repo) - Core DICOM/RIS data backbone
+The foundational layer that ingests, processes, and stores medical imaging data:
+| Component | Role | Depends On |
+|-----------|------|------------|
+| `box` | DICOM harmonization (GE/Philips/Siemens), RIS integration | `quantivly-sdk` |
+| `ptbi` | DICOM networking (Python+Java/dcm4che) | `quantivly-sdk` |
+| `auto-conf` | Jinja2 stack generator (configures both platform AND hub) | — |
+| `quantivly-sdk` | Python SDK for platform services | — |
+
+**hub** (`hub` repo) - Healthcare analytics portal (builds on platform)
+User-facing application providing analytics, recommendations, and plugins:
 | Repository | Role | Depends On |
 |------------|------|------------|
-| `sre-core` | Django backend (GraphQL, plugins) | `sre-sdk` |
+| `sre-core` | Django backend (GraphQL API, plugin system) | `sre-sdk` |
 | `sre-ui` | Next.js frontend | `sre-core` GraphQL |
-| `sre-event-bridge` | WAMP→REST bridge | `sre-sdk` |
+| `sre-event-bridge` | WAMP→REST bridge (connects to platform's WAMP router) | `sre-sdk` |
 | `sre-postgres` | PostgreSQL database | — |
 | `sre-sdk` | Python SDK for hub services | — |
 
-**platform** (quantivly-dockers) - DICOM/RIS backbone
-| Component | Role | Depends On |
-|-----------|------|------------|
-| `auto-conf` | Jinja2 stack generator | — |
-| `box` | DICOM harmonization (GE/Philips/Siemens), RIS | `quantivly-sdk` |
-| `ptbi` | DICOM networking (Python+Java/dcm4che) | `quantivly-sdk` |
-| `quantivly-sdk` | Python SDK for platform services | — |
-
-**Key integration point**: `auto-conf` generates stack configs for *both* ecosystems—platform services (`modules/quantivly/box/`, etc.) and hub services (`modules/quantivly/sre/`).
+**How they connect**: In production, hub integrates with platform's backbone (Keycloak auth, WAMP messaging, shared networking). Platform's `auto-conf` generates deployment configs for both: platform services (`modules/quantivly/box/`, etc.) and hub services (`modules/quantivly/sre/`).
 
 ### Cross-Repo Validation Examples
 | Change In | Validate Against |
