@@ -131,7 +131,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: '🤖 Claude review started... This typically takes 2-5 minutes.\n\n_Analyzing code for security, logic errors, code quality, testing, and performance._\n\n_Claude has access to Linear for requirement validation and GitHub for cross-repository context._'
+              body: '🤖 Claude review started... This typically takes 2-5 minutes.\n\n_Analyzing code for security, logic errors, code quality, testing, and performance._'
             });
 
       - name: Run Claude review with retry
