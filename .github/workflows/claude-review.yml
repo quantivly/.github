@@ -147,40 +147,24 @@ jobs:
             core.setOutput('custom', instructions);
 
       - name: Create MCP config for Linear
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
-          # Create .mcp.json in repo root for Claude Code to auto-detect
-          # Linear MCP requires Bearer token in Authorization header
-          if [ -n "$LINEAR_API_KEY" ]; then
-            printf '%s\n' '{
-              "mcpServers": {
-                "linear": {
-                  "type": "http",
-                  "url": "https://mcp.linear.app/mcp",
-                  "headers": {
-                    "Authorization": "Bearer '"$LINEAR_API_KEY"'"
-                  }
-                }
-              }
-            }' > .mcp.json
-            echo "Created .mcp.json with Linear MCP server"
-          else
-            echo "LINEAR_API_KEY not set, skipping Linear MCP configuration"
-          fi
+          # Create .mcp.json with env var reference for Claude Code to expand at runtime
+          echo '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer ${LINEAR_API_KEY}"}}}}' > .mcp.json
+          echo "Created .mcp.json with Linear MCP server (uses LINEAR_API_KEY env var)"
 
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
+        env:
+          # Pass Linear API key as environment variable for MCP server
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           track_progress: true
           # Auto-approve MCP servers from .mcp.json
           settings: '{"enableAllProjectMcpServers": true}'
-          # TODO: Re-enable plugins once installation issues are resolved
-          # plugins: |
-          #   pr-review-toolkit@claude-plugins-official
-          #   superpowers@claude-plugins-official
+          # Install Linear plugin for issue tracking integration
+          plugins: linear@claude-plugins-official
           # Allow tools for PR review:
           # - Action's built-in GitHub tools (inline comments, PR operations)
           # - Linear MCP tools (issue context, requirements) via .mcp.json
