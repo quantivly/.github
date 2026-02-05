@@ -292,6 +292,35 @@ Provide advisory (non-blocking) feedback if Linear issue lacks:
 - Security requirements
 - Performance requirements
 
+## Cross-Repository Context (GitHub MCP)
+
+When GitHub MCP tools are available, Claude can fetch code from related repositories to validate changes:
+
+### When to Use Cross-Repo Context
+- **Component API changes** in `quantivly/sre-ui` → Check consumers in `quantivly/hub`
+- **Shared utility modifications** → Verify usage patterns in consuming repositories
+- **Type/interface changes** → Validate compatibility with dependent code
+- **API endpoint changes** in `sre-core` → Check frontend consumers
+
+### Repository Relationships
+| Source Repository | Consumers |
+|-------------------|-----------|
+| `quantivly/sre-ui` | `quantivly/hub/sre-ui` (shared components) |
+| `quantivly/sre-core` | `quantivly/sre-ui`, `quantivly/hub` (Django APIs) |
+| `quantivly/platform` | All services (infrastructure) |
+
+### Available GitHub MCP Tools
+- `github_get_file_contents` - Read specific files from any Quantivly repo
+- `github_search_code` - Search for code patterns across organization repos
+- `github_get_commit` - Get commit details for context
+- `github_list_commits` - List recent commits in a repository
+
+### Guidelines
+- Only access repositories within the `quantivly` organization
+- Use cross-repo context when reviewing changes to shared/exported code
+- Validate that API contracts are maintained across repositories
+- Don't use GitHub tools for files already in the PR diff
+
 ## Healthcare/HIPAA Context
 
 Quantivly builds healthcare analytics software, which means:
@@ -321,6 +350,6 @@ This document should evolve based on:
 
 ---
 
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-02-05
 **Owner**: Engineering Team
 **Related**: [Claude Integration Guide](claude-integration-guide.md), Repository CLAUDE.md files

@@ -293,6 +293,29 @@ When PR title includes Linear issue ID (format: `AAA-####`), Claude:
 
 **Note**: GitHub-Linear integration automatically notifies Linear issue when review is posted.
 
+### GitHub MCP Integration (Cross-Repository Context)
+
+Claude can fetch code from related repositories when reviewing PRs. This enables validation that changes work correctly in their consuming context.
+
+**When enabled**, Claude can:
+- Read files from other Quantivly repositories (e.g., check how `hub` uses `sre-ui` components)
+- Search for code patterns across the organization
+- Validate that API contracts are maintained across repositories
+
+**Repository relationships**:
+| Source Repository | Consumers |
+|-------------------|-----------|
+| `quantivly/sre-ui` | `quantivly/hub/sre-ui` (shared components) |
+| `quantivly/sre-core` | `quantivly/sre-ui`, `quantivly/hub` (Django APIs) |
+| `quantivly/platform` | All services (infrastructure) |
+
+**When to expect cross-repo validation**:
+- Changes to exported components in `sre-ui`
+- API endpoint changes in `sre-core`
+- Shared type/interface modifications
+
+**Configuration**: Requires `GITHUB_MCP_TOKEN` organization secret (falls back to `GITHUB_TOKEN` if not set).
+
 ### Best Practices
 
 1. **Review BEFORE human review** - Catch issues early, save reviewer time
