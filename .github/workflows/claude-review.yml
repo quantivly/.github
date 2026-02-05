@@ -190,7 +190,7 @@ jobs:
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git diff *),Read,Glob,Grep,LS"
+            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
@@ -216,6 +216,9 @@ jobs:
             ## Review Workflow (CRITICAL - Follow These Steps Exactly)
 
             You MUST post your review as an actual GitHub review event, NOT a plain comment.
+
+            **IMPORTANT**: Use the MCP tools below, NOT `gh pr review` or `gh pr comment` CLI commands.
+            The MCP tools create proper review events with inline comments. CLI commands just create comments.
 
             **Step 1: Create Pending Review**
             Use `mcp__plugin_github_github__pull_request_review_write` with:
