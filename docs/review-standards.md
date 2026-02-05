@@ -292,6 +292,62 @@ Provide advisory (non-blocking) feedback if Linear issue lacks:
 - Security requirements
 - Performance requirements
 
+## Cross-Repository Context (GitHub MCP)
+
+When GitHub MCP tools are available, Claude can fetch code from related repositories to validate changes:
+
+### When to Use Cross-Repo Context
+- **API endpoint changes** in `sre-core` → Check frontend consumers in `sre-ui`
+- **Type/interface changes** in `sre-core` → Validate compatibility with `sre-ui` TypeScript types
+- **auto-conf template changes** in `platform` → Verify stack file rendering for all products
+- **SDK changes** in `platform` → Check consuming services (box, ptbi, etc.)
+- **Event bridge changes** → Validate WAMP router integration and REST API consumers
+
+### Quantivly Repository Architecture
+
+Two-layer architecture: **platform** provides the foundational data infrastructure, **hub** provides the user-facing analytics portal on top.
+
+**platform** (`quantivly-dockers` repo) - Core DICOM/RIS data backbone
+The foundational layer that ingests, processes, and stores medical imaging data:
+| Component | Role | Depends On |
+|-----------|------|------------|
+| `box` | DICOM harmonization (GE/Philips/Siemens), RIS integration | `quantivly-sdk` |
+| `ptbi` | DICOM networking (Python+Java/dcm4che) | `quantivly-sdk` |
+| `auto-conf` | Jinja2 stack generator (configures both platform AND hub) | — |
+| `quantivly-sdk` | Python SDK for platform services | — |
+
+**hub** (`hub` repo) - Healthcare analytics portal (builds on platform)
+User-facing application providing analytics, recommendations, and plugins:
+| Repository | Role | Depends On |
+|------------|------|------------|
+| `sre-core` | Django backend (GraphQL API, plugin system) | `sre-sdk` |
+| `sre-ui` | Next.js frontend | `sre-core` GraphQL |
+| `sre-event-bridge` | WAMP→REST bridge (connects to platform's WAMP router) | `sre-sdk` |
+| `sre-postgres` | PostgreSQL database | — |
+| `sre-sdk` | Python SDK for hub services | — |
+
+**How they connect**: In production, hub integrates with platform's backbone (Keycloak auth, WAMP messaging, shared networking). Platform's `auto-conf` generates deployment configs for both: platform services (`modules/quantivly/box/`, etc.) and hub services (`modules/quantivly/sre/`).
+
+### Cross-Repo Validation Examples
+| Change In | Validate Against |
+|-----------|------------------|
+| `sre-core` GraphQL schema | `sre-ui` TypeScript types/queries |
+| `sre-sdk` | `sre-core`, `sre-event-bridge` |
+| `quantivly-sdk` | `box`, `ptbi`, `healthcheck` |
+| `auto-conf` templates | Rendered stack files |
+
+### Available GitHub MCP Tools
+- `github_get_file_contents` - Read specific files from any Quantivly repo
+- `github_search_code` - Search for code patterns across organization repos
+- `github_get_commit` - Get commit details for context
+- `github_list_commits` - List recent commits in a repository
+
+### Guidelines
+- Only access repositories within the `quantivly` organization
+- Use cross-repo context when reviewing changes to shared/exported code
+- Validate that API contracts are maintained across repositories
+- Don't use GitHub tools for files already in the PR diff
+
 ## Healthcare/HIPAA Context
 
 Quantivly builds healthcare analytics software, which means:
@@ -304,10 +360,20 @@ Quantivly builds healthcare analytics software, which means:
 - **Third-Party**: External service integration requires BAA
 
 ### Common Patterns
-- **Django**: Plugin system, GraphQL API, Celery tasks
-- **Next.js**: Server-side rendering, Keycloak auth
+
+**hub (sre-*) patterns**:
+- **Django (sre-core)**: Plugin system, GraphQL API, Celery tasks
+- **Next.js (sre-ui)**: Server-side rendering, Keycloak auth
 - **Data Flow**: PostgreSQL → Django → GraphQL → Next.js
 - **Authentication**: Hybrid Keycloak + Django admin
+
+**platform patterns**:
+- **WAMP**: Inter-service communication via Crossbar.io router (pub/sub + RPC)
+- **Poetry**: Package management for all Python services
+- **Docker Swarm**: Container orchestration with Compose files
+- **Flyway**: SQL database migrations with versioned scripts
+- **Code Style**: Black (120 line-length), isort, Ruff, pre-commit hooks
+- **Testing**: pytest with `--dockers-host` for integration tests
 
 ## Continuous Improvement
 
@@ -321,6 +387,6 @@ This document should evolve based on:
 
 ---
 
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-02-05
 **Owner**: Engineering Team
 **Related**: [Claude Integration Guide](claude-integration-guide.md), Repository CLAUDE.md files

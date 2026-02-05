@@ -26,8 +26,12 @@ import json
 import os
 import re
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, AsyncGenerator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import anthropic
 from github import Github, GithubException
@@ -49,6 +53,20 @@ MAX_FILE_CONTENT_LINES = 500  # Limit individual file content
 MAX_INSTRUCTION_LENGTH = 2000  # Limit reviewer instructions to prevent prompt injection
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 MAX_TOKENS = 5000
+
+# MCP Server Configuration
+LINEAR_MCP_URL = "https://mcp.linear.app/mcp"
+GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
+GITHUB_TOOL_PREFIX = "github_"  # Namespace to distinguish from Linear tools
+
+# GitHub MCP tools to expose (whitelist for security and token efficiency)
+# Only include tools needed for cross-repository code context
+GITHUB_ESSENTIAL_TOOLS = {
+    "get_file_contents",  # Read files from related repos
+    "search_code",  # Search for code patterns across repos
+    "get_commit",  # Get commit details
+    "list_commits",  # List commits for context
+}
 
 
 def extract_linear_id(pr_title: str) -> str | None:
@@ -135,12 +153,33 @@ def truncate_diff(diff: str, max_lines: int) -> str:
     return "\n".join(truncated)
 
 
-def convert_mcp_tools_to_anthropic_format(mcp_tools: list[Any]) -> list[dict[str, Any]]:
-    """Convert MCP tool definitions to Anthropic API tool format."""
+def convert_mcp_tools_to_anthropic_format(
+    mcp_tools: list[Any],
+    prefix: str = "",
+    filter_set: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Convert MCP tool definitions to Anthropic API tool format.
+
+    Args:
+        mcp_tools: List of MCP tool objects from list_tools()
+        prefix: Optional prefix to add to tool names (e.g., "github_")
+        filter_set: Optional set of tool names to include (whitelist)
+
+    Returns:
+        List of tool definitions in Anthropic API format
+    """
     anthropic_tools = []
     for tool in mcp_tools:
+        # Skip tools not in whitelist (if specified)
+        if filter_set and tool.name not in filter_set:
+            continue
+
+        # Apply prefix for namespacing
+        tool_name = f"{prefix}{tool.name}" if prefix else tool.name
+
         anthropic_tool = {
-            "name": tool.name,
+            "name": tool_name,
             "description": tool.description or "No description provided",
             "input_schema": tool.inputSchema if hasattr(tool, "inputSchema") else {},
         }
@@ -349,10 +388,21 @@ def build_review_prompt(
     claude_md: str,
     diff: str,
     has_linear_tools: bool = False,
+    has_github_tools: bool = False,
     reviewer_instructions: str = "",
 ) -> tuple[str, str]:
     """
     Construct comprehensive review prompt with static and dynamic content.
+
+    Args:
+        pr: PyGithub PullRequest object
+        files: List of changed files
+        linear_id: Linear issue ID extracted from PR title (or None)
+        claude_md: Contents of repository CLAUDE.md
+        diff: PR diff content
+        has_linear_tools: Whether Linear MCP tools are available
+        has_github_tools: Whether GitHub MCP tools are available for cross-repo context
+        reviewer_instructions: Custom instructions from @claude comment
 
     Returns:
         Tuple of (static_content, dynamic_content) for prompt caching optimization.
@@ -418,6 +468,50 @@ Review based on:
 If a Linear issue is mentioned in the PR title, note its ID but proceed without fetching details."""
         linear_usage_guideline = ""
 
+    # Build conditional GitHub instructions for cross-repository context
+    if has_github_tools:
+        github_instructions = """
+## Cross-Repository Context (GitHub MCP)
+
+You have GitHub MCP tools (prefixed with `github_`) for fetching code from Quantivly repositories:
+- `github_get_file_contents` - Read specific files from any Quantivly repo
+- `github_search_code` - Search for code patterns across organization repos
+- `github_get_commit` - Get commit details for context
+- `github_list_commits` - List recent commits in a repository
+
+**When to use cross-repo context**:
+1. **`sre-core` GraphQL changes** → Check `sre-ui` queries and TypeScript types
+2. **`sre-sdk` changes** → Check consumers: `sre-core`, `sre-event-bridge`
+3. **`quantivly-sdk` changes** → Check consumers: `box`, `ptbi`, `healthcheck`
+4. **`auto-conf` template changes** → Verify stack file rendering
+
+**Quantivly repository architecture** (two-layer: platform = foundation, hub = user portal on top):
+
+*platform* (`quantivly-dockers` repo) - Core DICOM/RIS data backbone:
+- `box` - DICOM harmonization (GE/Philips/Siemens), RIS integration — depends on `quantivly-sdk`
+- `ptbi` - DICOM networking (Python+Java/dcm4che) — depends on `quantivly-sdk`
+- `auto-conf` - Jinja2 stack generator (configures BOTH platform AND hub deployments via `modules/quantivly/sre/`)
+- `quantivly-sdk` - Python SDK for platform services
+
+*hub* (`hub` repo) - Healthcare analytics portal (builds on platform backbone):
+- `sre-core` - Django backend (GraphQL API, plugin system) — depends on `sre-sdk`
+- `sre-ui` - Next.js frontend — consumes `sre-core` GraphQL
+- `sre-event-bridge` - WAMP→REST bridge (connects to platform's WAMP router) — depends on `sre-sdk`
+- `sre-sdk` - Python SDK for hub services
+
+In production, hub integrates with platform's backbone (Keycloak auth, WAMP messaging, shared networking).
+
+**Guidelines**:
+- Only access repositories within the `quantivly` organization
+- Use cross-repo context when reviewing changes to shared/exported code
+- Validate that API contracts are maintained across repositories
+- Don't use GitHub tools for files already in the PR diff
+"""
+        github_usage_guideline = "- **Use GitHub tools** for cross-repo validation when reviewing shared components or APIs\n"
+    else:
+        github_instructions = ""
+        github_usage_guideline = ""
+
     # Build static content (cacheable - doesn't change between reviews)
     static_content = f"""# Role
 You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
@@ -452,7 +546,7 @@ Conduct a comprehensive code review with the following priorities:
 
 ## 1. Linear Requirement Validation (If Applicable)
 {linear_instructions}
-
+{github_instructions}
 ## 2. Security Analysis (CRITICAL)
 - OWASP Top 10 vulnerabilities
 - HIPAA compliance considerations (PHI handling, access controls, audit logging)
@@ -543,7 +637,7 @@ Provide your review in this exact structure:
 
 # Guidelines
 
-{linear_usage_guideline}- Be specific with file paths and line numbers (`file.py:123` or `file.py:123-145`)
+{linear_usage_guideline}{github_usage_guideline}- Be specific with file paths and line numbers (`file.py:123` or `file.py:123-145`)
 - Prioritize security and correctness over style
 - Reference Linear requirements explicitly when applicable
 - Explain WHY something is an issue, not just WHAT
@@ -619,21 +713,141 @@ Please conduct your review according to the guidelines and priorities above.
     return static_content, dynamic_content
 
 
+@asynccontextmanager
+async def multi_mcp_sessions(
+    linear_api_key: str | None,
+    github_mcp_token: str | None,
+) -> AsyncGenerator[tuple[list[dict[str, Any]], dict[str, tuple[ClientSession, str]]], None]:
+    """
+    Connect to multiple MCP servers and yield combined tools with routing info.
+
+    This context manager handles connections to both Linear and GitHub MCP servers,
+    combining their tools into a single list while maintaining routing information
+    for tool execution.
+
+    Args:
+        linear_api_key: Linear API key for Linear MCP server (optional)
+        github_mcp_token: GitHub token for GitHub MCP server (optional)
+
+    Yields:
+        Tuple of (all_tools, tool_router) where:
+        - all_tools: Combined list of tools in Anthropic format
+        - tool_router: Dict mapping tool_name -> (session, original_name)
+    """
+    all_tools: list[dict[str, Any]] = []
+    tool_router: dict[str, tuple[ClientSession, str]] = {}
+
+    # Track MCP server stats
+    linear_tool_count = 0
+    github_tool_count = 0
+
+    # Check if HTTP client is available
+    if streamablehttp_client is None:
+        print("⚠️  MCP HTTP client not available in installed mcp package")
+        yield all_tools, tool_router
+        return
+
+    # Use a list to track sessions so we can clean them up
+    sessions_to_close: list[tuple[Any, ClientSession]] = []
+
+    try:
+        # Connect to Linear MCP if API key provided
+        if linear_api_key:
+            try:
+                print(f"🔗 Connecting to Linear MCP server at {LINEAR_MCP_URL}...")
+                linear_ctx = await streamablehttp_client(
+                    LINEAR_MCP_URL,
+                    headers={"Authorization": f"Bearer {linear_api_key}"},
+                ).__aenter__()
+
+                linear_session = ClientSession(linear_ctx[0], linear_ctx[1])
+                await linear_session.__aenter__()
+                sessions_to_close.append((linear_ctx, linear_session))
+
+                await linear_session.initialize()
+                linear_tools_response = await linear_session.list_tools()
+
+                # Convert and add Linear tools (no prefix - existing behavior)
+                linear_tools = convert_mcp_tools_to_anthropic_format(
+                    linear_tools_response.tools
+                )
+                for tool in linear_tools:
+                    all_tools.append(tool)
+                    tool_router[tool["name"]] = (linear_session, tool["name"])
+                    linear_tool_count += 1
+
+                print(f"✓ Linear MCP: {linear_tool_count} tools")
+            except (asyncio.TimeoutError, ConnectionError, OSError) as e:
+                print(f"⚠️  Linear MCP connection failed: {e}")
+            except Exception as e:
+                print(f"⚠️  Linear MCP error: {e}")
+
+        # Connect to GitHub MCP if token provided
+        if github_mcp_token:
+            try:
+                print(f"🔗 Connecting to GitHub MCP server at {GITHUB_MCP_URL}...")
+                github_ctx = await streamablehttp_client(
+                    GITHUB_MCP_URL,
+                    headers={"Authorization": f"Bearer {github_mcp_token}"},
+                ).__aenter__()
+
+                github_session = ClientSession(github_ctx[0], github_ctx[1])
+                await github_session.__aenter__()
+                sessions_to_close.append((github_ctx, github_session))
+
+                await github_session.initialize()
+                github_tools_response = await github_session.list_tools()
+
+                # Convert and add GitHub tools (with prefix and filter)
+                github_tools = convert_mcp_tools_to_anthropic_format(
+                    github_tools_response.tools,
+                    prefix=GITHUB_TOOL_PREFIX,
+                    filter_set=GITHUB_ESSENTIAL_TOOLS,
+                )
+                for tool in github_tools:
+                    all_tools.append(tool)
+                    # Strip prefix to get original name for MCP call
+                    original_name = tool["name"][len(GITHUB_TOOL_PREFIX):]
+                    tool_router[tool["name"]] = (github_session, original_name)
+                    github_tool_count += 1
+
+                print(f"✓ GitHub MCP: {github_tool_count} tools (filtered from {len(github_tools_response.tools)})")
+            except (asyncio.TimeoutError, ConnectionError, OSError) as e:
+                print(f"⚠️  GitHub MCP connection failed: {e}")
+            except Exception as e:
+                print(f"⚠️  GitHub MCP error: {e}")
+
+        yield all_tools, tool_router
+
+    finally:
+        # Clean up sessions in reverse order
+        for ctx, session in reversed(sessions_to_close):
+            try:
+                await session.__aexit__(None, None, None)
+            except Exception:
+                pass
+            try:
+                await ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+
+
 async def call_claude_with_mcp(
     static_content: str,
     dynamic_content: str,
     anthropic_key: str,
     linear_api_key: str | None,
-) -> tuple[str, Any, bool, int, dict[str, Any] | None]:
+    github_mcp_token: str | None = None,
+) -> tuple[str, Any, bool, bool, int, dict[str, Any] | None]:
     """
-    Call Claude API with Linear MCP tools available and prompt caching.
+    Call Claude API with MCP tools (Linear and GitHub) available and prompt caching.
 
     This function:
-    1. Starts the Linear MCP server
-    2. Connects as an MCP client
-    3. Gets available Linear tools
+    1. Connects to Linear MCP server (for issue context)
+    2. Connects to GitHub MCP server (for cross-repo code context)
+    3. Gets available tools from both servers
     4. Calls Claude with tools available and prompt caching enabled
-    5. Handles tool_use conversation loop
+    5. Handles tool_use conversation loop with routing
     6. Returns the final review text and response object for metrics
 
     Prompt caching optimization:
@@ -641,11 +855,20 @@ async def call_claude_with_mcp(
     - Reduces cost by 35% and latency by 85% for cached content
     - Cache automatically refreshes on each use (free)
 
+    Args:
+        static_content: Cacheable prompt content (role, guidelines)
+        dynamic_content: PR-specific content (not cached)
+        anthropic_key: Anthropic API key
+        linear_api_key: Linear API key for Linear MCP server (optional)
+        github_mcp_token: GitHub token for GitHub MCP server (optional)
+
     Returns:
-        Tuple of (review_text, final_response, had_linear_context, tool_call_count, linear_issue_data)
+        Tuple of (review_text, final_response, had_linear_context, had_github_context,
+                  tool_call_count, linear_issue_data)
             - review_text: The generated review content
             - final_response: The Anthropic API response object (for metrics)
             - had_linear_context: Whether Linear tools were available
+            - had_github_context: Whether GitHub tools were available
             - tool_call_count: Number of tool calls made during review
             - linear_issue_data: Linear issue details if fetched (dict with id, title, state)
     """
@@ -662,8 +885,9 @@ async def call_claude_with_mcp(
         },
     ]
 
-    if not linear_api_key:
-        print("⚠️  No LINEAR_API_KEY provided, proceeding without Linear tools")
+    # Check if we have any MCP credentials
+    if not linear_api_key and not github_mcp_token:
+        print("⚠️  No MCP credentials provided, proceeding without tools")
         # Call Claude without tools
         client = anthropic.Anthropic(api_key=anthropic_key)
         message = client.messages.create(
@@ -679,172 +903,171 @@ async def call_claude_with_mcp(
             print(f"⚡ Cache hit: {message.usage.cache_read_input_tokens} tokens")
 
         review_text = strip_tool_simulation_markup(message.content[0].text)
-        return review_text, message, False, 0, None  # No Linear context available
-
-    # Check if HTTP client is available
-    if streamablehttp_client is None:
-        print("❌ MCP HTTP client not available in installed mcp package")
-        print("⚠️  Falling back to review without Linear tools")
-        # Fallback: call Claude without tools
-        client = anthropic.Anthropic(api_key=anthropic_key)
-        message = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=MAX_TOKENS,
-            messages=[{"role": "user", "content": initial_content}],
-        )
-        review_text = strip_tool_simulation_markup(message.content[0].text)
-        return review_text, message, False, 0, None
-
-    # Connect to Linear's official hosted MCP server
-    linear_mcp_url = "https://mcp.linear.app/mcp"
-    print(f"🔗 Connecting to Linear MCP server at {linear_mcp_url}...")
+        return review_text, message, False, False, 0, None
 
     try:
-        # Connect to Linear's hosted MCP server with bearer token auth
-        async with streamablehttp_client(
-            linear_mcp_url,
-            headers={"Authorization": f"Bearer {linear_api_key}"}
-        ) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                # Initialize MCP connection
-                await session.initialize()
-                print("✓ Connected to Linear MCP server")
+        # Connect to MCP servers using multi-session context manager
+        async with multi_mcp_sessions(linear_api_key, github_mcp_token) as (tools, tool_router):
+            # Track which MCP servers were connected
+            had_linear = any(not name.startswith(GITHUB_TOOL_PREFIX) for name in tool_router)
+            had_github = any(name.startswith(GITHUB_TOOL_PREFIX) for name in tool_router)
 
-                # Get available tools
-                tools_response = await session.list_tools()
-                tools = convert_mcp_tools_to_anthropic_format(tools_response.tools)
-                print(f"✓ Loaded {len(tools)} Linear tools")
-
-                # Initialize Anthropic client
+            if not tools:
+                print("⚠️  No MCP tools available, proceeding without tools")
                 client = anthropic.Anthropic(api_key=anthropic_key)
+                message = client.messages.create(
+                    model=CLAUDE_MODEL,
+                    max_tokens=MAX_TOKENS,
+                    messages=[{"role": "user", "content": initial_content}],
+                )
+                review_text = strip_tool_simulation_markup(message.content[0].text)
+                return review_text, message, False, False, 0, None
 
-                # Start conversation with cached content
-                messages = [{"role": "user", "content": initial_content}]
+            print(f"✓ Total MCP tools available: {len(tools)}")
 
-                # Track tool usage and Linear issue data for metrics
-                tool_call_count = 0
-                linear_issue_data: dict[str, Any] | None = None
+            # Initialize Anthropic client
+            client = anthropic.Anthropic(api_key=anthropic_key)
 
-                # Conversation loop to handle tool use
-                iteration = 0
-                max_iterations = 10  # Prevent infinite loops
+            # Start conversation with cached content
+            messages = [{"role": "user", "content": initial_content}]
 
-                while iteration < max_iterations:
-                    iteration += 1
-                    print(f"⏳ Claude API call (iteration {iteration})...")
+            # Track tool usage and Linear issue data for metrics
+            tool_call_count = 0
+            linear_issue_data: dict[str, Any] | None = None
 
-                    response = client.messages.create(
-                        model=CLAUDE_MODEL,
-                        max_tokens=MAX_TOKENS,
-                        tools=tools,
-                        messages=messages,
-                    )
+            # Conversation loop to handle tool use
+            iteration = 0
+            max_iterations = 10  # Prevent infinite loops
 
-                    # Log token usage including cache metrics
-                    input_tokens = response.usage.input_tokens
-                    output_tokens = response.usage.output_tokens
-                    print(f"📊 Tokens: {input_tokens} input, {output_tokens} output")
+            while iteration < max_iterations:
+                iteration += 1
+                print(f"⏳ Claude API call (iteration {iteration})...")
 
-                    # Log cache performance
-                    if hasattr(response.usage, "cache_creation_input_tokens"):
-                        cache_created = response.usage.cache_creation_input_tokens
-                        if cache_created > 0:
-                            print(f"💾 Cache created: {cache_created} tokens")
-                    if hasattr(response.usage, "cache_read_input_tokens"):
-                        cache_hit = response.usage.cache_read_input_tokens
-                        if cache_hit > 0:
-                            print(f"⚡ Cache hit: {cache_hit} tokens (saved ~85% latency)")
+                response = client.messages.create(
+                    model=CLAUDE_MODEL,
+                    max_tokens=MAX_TOKENS,
+                    tools=tools,
+                    messages=messages,
+                )
 
-                    # Check if we're done
-                    if response.stop_reason == "end_turn":
-                        # Extract final review text
-                        review_text = ""
-                        for block in response.content:
-                            if hasattr(block, "text"):
-                                review_text += block.text
-                        review_text = strip_tool_simulation_markup(review_text)
-                        print("✓ Review completed")
-                        print(f"📊 Total tool calls: {tool_call_count}")
-                        return review_text, response, True, tool_call_count, linear_issue_data
+                # Log token usage including cache metrics
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+                print(f"📊 Tokens: {input_tokens} input, {output_tokens} output")
 
-                    # Handle tool use
-                    if response.stop_reason == "tool_use":
-                        # Add assistant's response to messages
-                        messages.append({"role": "assistant", "content": response.content})
+                # Log cache performance
+                if hasattr(response.usage, "cache_creation_input_tokens"):
+                    cache_created = response.usage.cache_creation_input_tokens
+                    if cache_created > 0:
+                        print(f"💾 Cache created: {cache_created} tokens")
+                if hasattr(response.usage, "cache_read_input_tokens"):
+                    cache_hit = response.usage.cache_read_input_tokens
+                    if cache_hit > 0:
+                        print(f"⚡ Cache hit: {cache_hit} tokens (saved ~85% latency)")
 
-                        # Process each tool use
-                        tool_results = []
-                        for block in response.content:
-                            if block.type == "tool_use":
-                                print(f"🔧 Executing tool: {block.name}")
-                                tool_call_count += 1  # Track tool usage
-
-                                # Call the tool via MCP
-                                try:
-                                    result = await session.call_tool(block.name, block.input)
-                                    print(f"✓ Tool {block.name} executed successfully")
-
-                                    # Capture Linear issue data if this is get_issue
-                                    if block.name == "get_issue" and linear_issue_data is None:
-                                        try:
-                                            # Parse the result to extract issue details
-                                            import json
-                                            issue_content = result.content[0].text if result.content else "{}"
-                                            issue_json = json.loads(issue_content)
-                                            linear_issue_data = {
-                                                "id": issue_json.get("identifier", ""),
-                                                "title": issue_json.get("title", ""),
-                                                "state": issue_json.get("state", {}).get("name", ""),
-                                                "description": (issue_json.get("description", "") or "")[:200],  # First 200 chars
-                                            }
-                                            print(f"📋 Captured Linear issue: {linear_issue_data['id']} - {linear_issue_data['title']}")
-                                        except (json.JSONDecodeError, KeyError, IndexError, AttributeError) as e:
-                                            print(f"⚠️  Could not parse Linear issue data: {e}")
-
-                                    tool_results.append({
-                                        "type": "tool_result",
-                                        "tool_use_id": block.id,
-                                        "content": result.content,
-                                    })
-                                except (asyncio.TimeoutError, OSError, RuntimeError) as e:
-                                    # MCP tool execution failures (connection, timeout, runtime errors)
-                                    print(f"⚠️  Tool {block.name} failed: {e}")
-                                    tool_results.append({
-                                        "type": "tool_result",
-                                        "tool_use_id": block.id,
-                                        "content": f"Error executing tool: {str(e)}",
-                                        "is_error": True,
-                                    })
-
-                        # Add tool results to conversation
-                        messages.append({"role": "user", "content": tool_results})
-                        continue
-
-                    # Unknown stop reason
-                    print(f"⚠️  Unexpected stop reason: {response.stop_reason}")
-                    # Extract whatever text we have
+                # Check if we're done
+                if response.stop_reason == "end_turn":
+                    # Extract final review text
                     review_text = ""
                     for block in response.content:
                         if hasattr(block, "text"):
                             review_text += block.text
-                    review_text = strip_tool_simulation_markup(review_text or "Review completed with unexpected stop reason")
-                    return (
-                        review_text,
-                        response,
-                        True,  # Had Linear context (even if unexpected stop)
-                        tool_call_count,
-                        linear_issue_data,
-                    )
+                    review_text = strip_tool_simulation_markup(review_text)
+                    print("✓ Review completed")
+                    print(f"📊 Total tool calls: {tool_call_count}")
+                    return review_text, response, had_linear, had_github, tool_call_count, linear_issue_data
 
-                # Max iterations reached
-                print("⚠️  Max iterations reached in conversation loop")
-                # Return last response for metrics
-                return "Review incomplete: maximum conversation turns exceeded", response, True, tool_call_count, linear_issue_data
+                # Handle tool use
+                if response.stop_reason == "tool_use":
+                    # Add assistant's response to messages
+                    messages.append({"role": "assistant", "content": response.content})
+
+                    # Process each tool use
+                    tool_results = []
+                    for block in response.content:
+                        if block.type == "tool_use":
+                            tool_name = block.name
+                            print(f"🔧 Executing tool: {tool_name}")
+                            tool_call_count += 1  # Track tool usage
+
+                            # Route tool call to appropriate MCP session
+                            if tool_name not in tool_router:
+                                print(f"⚠️  Unknown tool: {tool_name}")
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": block.id,
+                                    "content": f"Unknown tool: {tool_name}",
+                                    "is_error": True,
+                                })
+                                continue
+
+                            session, original_name = tool_router[tool_name]
+
+                            # Call the tool via MCP
+                            try:
+                                result = await session.call_tool(original_name, block.input)
+                                print(f"✓ Tool {tool_name} executed successfully")
+
+                                # Capture Linear issue data if this is get_issue
+                                if original_name == "get_issue" and linear_issue_data is None:
+                                    try:
+                                        # Parse the result to extract issue details
+                                        issue_content = result.content[0].text if result.content else "{}"
+                                        issue_json = json.loads(issue_content)
+                                        linear_issue_data = {
+                                            "id": issue_json.get("identifier", ""),
+                                            "title": issue_json.get("title", ""),
+                                            "state": issue_json.get("state", {}).get("name", ""),
+                                            "description": (issue_json.get("description", "") or "")[:200],
+                                        }
+                                        print(f"📋 Captured Linear issue: {linear_issue_data['id']} - {linear_issue_data['title']}")
+                                    except (json.JSONDecodeError, KeyError, IndexError, AttributeError) as e:
+                                        print(f"⚠️  Could not parse Linear issue data: {e}")
+
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": block.id,
+                                    "content": result.content,
+                                })
+                            except (asyncio.TimeoutError, OSError, RuntimeError) as e:
+                                # MCP tool execution failures (connection, timeout, runtime errors)
+                                print(f"⚠️  Tool {tool_name} failed: {e}")
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": block.id,
+                                    "content": f"Error executing tool: {str(e)}",
+                                    "is_error": True,
+                                })
+
+                    # Add tool results to conversation
+                    messages.append({"role": "user", "content": tool_results})
+                    continue
+
+                # Unknown stop reason
+                print(f"⚠️  Unexpected stop reason: {response.stop_reason}")
+                # Extract whatever text we have
+                review_text = ""
+                for block in response.content:
+                    if hasattr(block, "text"):
+                        review_text += block.text
+                review_text = strip_tool_simulation_markup(review_text or "Review completed with unexpected stop reason")
+                return (
+                    review_text,
+                    response,
+                    had_linear,
+                    had_github,
+                    tool_call_count,
+                    linear_issue_data,
+                )
+
+            # Max iterations reached
+            print("⚠️  Max iterations reached in conversation loop")
+            return "Review incomplete: maximum conversation turns exceeded", response, had_linear, had_github, tool_call_count, linear_issue_data
 
     except (asyncio.TimeoutError, ConnectionError, FileNotFoundError, OSError) as e:
         # MCP connection failures (timeout, server not found, connection issues)
         print(f"❌ MCP integration error: {e}")
-        print("⚠️  Falling back to review without Linear tools")
+        print("⚠️  Falling back to review without MCP tools")
 
         # Fallback: call Claude without tools but still use caching
         client = anthropic.Anthropic(api_key=anthropic_key)
@@ -861,7 +1084,7 @@ async def call_claude_with_mcp(
                 print(f"⚡ Cache hit: {cache_hit} tokens")
 
         review_text = strip_tool_simulation_markup(message.content[0].text)
-        return review_text, message, False, 0, None  # No Linear context (fallback)
+        return review_text, message, False, False, 0, None  # No MCP context (fallback)
 
 
 def log_token_metrics(response: Any, pr_number: int, tool_call_count: int = 0) -> float:
@@ -951,11 +1174,12 @@ def post_review_comment(
     review_text: str,
     commenter: str,
     had_linear_context: bool = True,
+    had_github_context: bool = False,
     tool_call_count: int = 0,
     linear_issue_data: dict[str, Any] | None = None,
     review_cost: float = 0.0,
 ) -> None:
-    """Post formatted review comment to PR with Linear context status and metrics."""
+    """Post formatted review comment to PR with MCP context status and metrics."""
     repo = github.get_repo(repo_full_name)
     pr = repo.get_pull(pr_number)
 
@@ -981,7 +1205,7 @@ def post_review_comment(
 ---
 """
 
-    # Build minimalist footer with Linear link, tool usage, and cost
+    # Build minimalist footer with MCP context info, tool usage, and cost
     footer_parts = [f"Triggered by @{commenter}", "Powered by Claude Sonnet 4.5"]
 
     # Add Linear issue link if available
@@ -991,7 +1215,11 @@ def post_review_comment(
         query_text = f"{tool_call_count} {'query' if tool_call_count == 1 else 'queries'}" if tool_call_count > 0 else "validated"
         footer_parts.append(f"Reviewed [{issue_id}]({issue_url}) ({query_text})")
     elif tool_call_count > 0:
-        footer_parts.append(f"Validated using {tool_call_count} Linear {'query' if tool_call_count == 1 else 'queries'}")
+        footer_parts.append(f"Validated using {tool_call_count} {'query' if tool_call_count == 1 else 'queries'}")
+
+    # Indicate GitHub cross-repo context was available
+    if had_github_context:
+        footer_parts.append("Cross-repo context enabled")
 
     # Add cost if available
     if review_cost > 0:
@@ -1016,6 +1244,9 @@ async def async_main(args: argparse.Namespace) -> int:
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     linear_key = os.getenv("LINEAR_API_KEY", "")
     github_token = os.getenv("GITHUB_TOKEN")
+    # GitHub MCP token for cross-repository context (optional)
+    # Falls back to GITHUB_TOKEN if GITHUB_MCP_TOKEN not set
+    github_mcp_token = os.getenv("GITHUB_MCP_TOKEN") or github_token
 
     if not anthropic_key:
         print("❌ ANTHROPIC_API_KEY not set")
@@ -1069,13 +1300,20 @@ async def async_main(args: argparse.Namespace) -> int:
         full_diff = truncate_diff(full_diff, MAX_DIFF_LINES)
         print(f"✓ Collected diff ({len(full_diff)} characters)")
 
-        # Determine if Linear tools will be available
-        # (using Linear's hosted HTTP MCP server - no npx needed)
+        # Determine if MCP tools will be available
+        # (using hosted HTTP MCP servers - no npx needed)
         has_linear_tools = bool(linear_key)
+        has_github_tools = bool(github_mcp_token)
+
         if has_linear_tools:
-            print("✓ Linear API key found, MCP tools will be available")
+            print("✓ Linear API key found, Linear MCP tools will be available")
         else:
             print("⚠️  No LINEAR_API_KEY, Linear MCP will not be available")
+
+        if has_github_tools:
+            print("✓ GitHub MCP token found, cross-repo context will be available")
+        else:
+            print("⚠️  No GITHUB_MCP_TOKEN, cross-repo context will not be available")
 
         # Extract reviewer instructions from comment body
         reviewer_instructions = extract_reviewer_instructions(args.comment_body)
@@ -1085,21 +1323,31 @@ async def async_main(args: argparse.Namespace) -> int:
         # Build review prompt with caching optimization
         print("📝 Building review prompt...")
         static_content, dynamic_content = build_review_prompt(
-            pr, files, linear_id, claude_md, full_diff, has_linear_tools, reviewer_instructions
+            pr, files, linear_id, claude_md, full_diff,
+            has_linear_tools=has_linear_tools,
+            has_github_tools=has_github_tools,
+            reviewer_instructions=reviewer_instructions,
         )
 
         # Call Claude API with MCP integration and prompt caching
-        review_text, final_response, had_linear_context, tool_call_count, linear_issue_data = await call_claude_with_mcp(
-            static_content, dynamic_content, anthropic_key, linear_key
+        (
+            review_text,
+            final_response,
+            had_linear_context,
+            had_github_context,
+            tool_call_count,
+            linear_issue_data,
+        ) = await call_claude_with_mcp(
+            static_content, dynamic_content, anthropic_key, linear_key, github_mcp_token
         )
 
         # Log token usage and cost metrics
         review_cost = log_token_metrics(final_response, args.pr_number, tool_call_count)
 
-        # Post review comment with Linear context status and metrics
+        # Post review comment with MCP context status and metrics
         post_review_comment(
             github, repo_full_name, args.pr_number, review_text, args.commenter,
-            had_linear_context, tool_call_count, linear_issue_data, review_cost
+            had_linear_context, had_github_context, tool_call_count, linear_issue_data, review_cost
         )
 
         print("✅ Review completed successfully")
