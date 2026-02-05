@@ -154,19 +154,18 @@ jobs:
           # Linear MCP requires Bearer token in Authorization header
           # Only include Linear MCP if API key is available
           if [ -n "$LINEAR_API_KEY" ]; then
-            cat > /tmp/mcp-config.json << EOF
-          {
-            "mcpServers": {
-              "linear": {
-                "type": "http",
-                "url": "https://mcp.linear.app/mcp",
-                "headers": {
-                  "Authorization": "Bearer ${LINEAR_API_KEY}"
+            # Use printf to avoid heredoc indentation issues
+            printf '%s\n' '{
+              "mcpServers": {
+                "linear": {
+                  "type": "http",
+                  "url": "https://mcp.linear.app/mcp",
+                  "headers": {
+                    "Authorization": "Bearer '"$LINEAR_API_KEY"'"
+                  }
                 }
               }
-            }
-          }
-          EOF
+            }' > /tmp/mcp-config.json
           else
             # Empty config if no Linear API key
             echo '{"mcpServers": {}}' > /tmp/mcp-config.json
