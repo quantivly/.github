@@ -170,7 +170,10 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          track_progress: true
+          # IMPORTANT: track_progress is intentionally NOT set (defaults to false)
+          # Setting it to true enables "tag mode" which filters MCP tools to only
+          # those matching mcp__github_* pattern - blocking our plugin review tools
+          # (mcp__plugin_github_github__*). Agent mode gives full tool access.
           # Add official plugin marketplace (not pre-configured in GitHub Actions)
           plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
           # Plugins:
@@ -193,6 +196,18 @@ jobs:
             PR NUMBER: ${{ github.event.issue.number }}
             LINEAR ISSUE: ${{ steps.linear.outputs.linear_id || 'Not specified' }}
             CUSTOM FOCUS: ${{ steps.instructions.outputs.custom || 'None - standard review' }}
+
+            ## First: Post Progress Comment
+
+            Before doing anything else, post a progress tracking comment so the user knows the review has started:
+            ```bash
+            gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+              -f body='🤖 **Claude review started...** This typically takes 2-5 minutes.
+
+            _Analyzing code for security, logic errors, code quality, testing, and performance._'
+            ```
+
+            Then proceed with the review workflow below.
 
             ## Your Role
 
@@ -235,7 +250,7 @@ jobs:
             After submitting the review, delete the progress tracking comment:
             ```bash
             COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
-              --jq '.[] | select(.user.login == "claude[bot]" or .user.login == "github-actions[bot]") | select(.body | startswith("**Claude")) | .id' | head -1)
+              --jq '.[] | select(.user.login == "claude[bot]" or .user.login == "github-actions[bot]") | select(.body | contains("Claude review started")) | .id' | head -1)
             if [ -n "$COMMENT_ID" ]; then
               gh api -X DELETE repos/${{ github.repository }}/issues/comments/$COMMENT_ID
             fi
