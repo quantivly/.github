@@ -137,6 +137,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          # Allow gh CLI and file reading for PR review
+          claude_args: '--allowedTools "Bash(gh pr:*),Bash(gh api:*),Read,Glob,Grep,LS"'
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
