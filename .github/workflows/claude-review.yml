@@ -147,15 +147,18 @@ jobs:
             core.setOutput('custom', instructions);
 
       - name: Create MCP config for Linear
-        if: ${{ secrets.LINEAR_API_KEY != '' }}
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
           # Create .mcp.json with explicit auth headers for Linear MCP server
           # The Linear plugin provides tools, but GitHub Actions needs explicit Bearer auth
           # (locally, Claude Code auto-injects auth from env vars)
-          printf '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer %s"}}}}' "$LINEAR_API_KEY" > .mcp.json
-          echo "Created .mcp.json with Linear MCP server auth configuration"
+          if [ -n "$LINEAR_API_KEY" ]; then
+            printf '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer %s"}}}}' "$LINEAR_API_KEY" > .mcp.json
+            echo "Created .mcp.json with Linear MCP server auth configuration"
+          else
+            echo "LINEAR_API_KEY not set, skipping MCP config"
+          fi
 
       - name: Run Claude PR Review
         uses: anthropics/claude-code-action@v1
