@@ -319,6 +319,10 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 ### Validation Checklist
 
 - [ ] Second review posted
+- [ ] Review body includes **Prior reviews** line (e.g., "Re-review #2. X of Y prior findings addressed.")
+- [ ] Fixed issues are NOT re-flagged as inline comments
+- [ ] New or remaining issues are flagged normally with inline comments
+- [ ] Review count is accurate (matches number of previous Claude reviews)
 - [ ] **Critical Issues** now shows issues resolved or "No critical issues"
 - [ ] **Positive Observations** mentions fixes
 - [ ] **Recommendation** changes to **APPROVE** or **COMMENT**

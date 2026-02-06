@@ -17,6 +17,7 @@ Quantivly uses Claude (Anthropic's AI) to provide automated, high-quality code r
 - 🤖 **Consistent standards** - Follows repository CLAUDE.md conventions
 - 💬 **Inline comments** - Comments attached directly to specific lines in the diff
 - ✅ **Formal reviews** - Proper GitHub review events (APPROVE/REQUEST_CHANGES)
+- 🔄 **Context-aware re-reviews** - Remembers previous findings, focuses on new/changed code
 
 ---
 
@@ -286,7 +287,7 @@ Claude explains **WHY** something is an issue, not just **WHAT**. Read the expla
 
 ### 4. Re-Review After Significant Changes
 
-If you make substantial changes (not just minor tweaks), comment `@claude` again to verify fixes.
+If you make substantial changes (not just minor tweaks), comment `@claude` again to verify fixes. Re-reviews are context-aware: Claude reads its previous review findings and focuses on new or changed code rather than repeating the same feedback. Fixed issues are acknowledged in the summary rather than re-flagged.
 
 ### 5. Don't Ignore Security Findings
 
@@ -356,6 +357,17 @@ pre-commit run --all-files
 - Network timeouts (retry)
 
 You can always re-trigger by commenting `@claude` again.
+
+---
+
+### Q: Does Claude remember previous reviews?
+
+**A**: Yes. When you trigger `@claude` on a PR that already has Claude reviews, it reads the latest review summary and inline findings. Re-reviews focus on:
+- New code not previously reviewed
+- Code changed since the last review
+- Prior findings addressed incorrectly or incompletely
+
+Fixed issues are acknowledged in the summary but not re-flagged as inline comments. The review body includes a "Prior reviews" line showing the review count and how many prior findings were addressed.
 
 ---
 
