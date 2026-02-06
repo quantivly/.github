@@ -13,6 +13,20 @@ Reviews should follow this priority order, focusing first on critical issues bef
 5. **Testing** - Is it adequately tested?
 6. **Performance** - Is it efficient?
 
+## Triage: What to Check Based on PR Type
+
+Allocate review attention proportionally. Not every checklist item applies to every PR.
+
+| PR Type | Primary Focus | Secondary | Skip |
+|---------|--------------|-----------|------|
+| New API endpoint | Security, Logic, Testing | Quality | Performance (unless hot path) |
+| UI changes | Quality, Testing | Performance | Security (unless auth-related) |
+| Config/infra | Security, Correctness | — | Testing, Performance |
+| Bug fix | Logic, Testing (regression) | — | Quality, Performance |
+| Dependency update | Security (CVEs) | — | Everything else |
+| Docs/README only | Correctness of content | — | All code checklists |
+| Database migration | Data Consistency, Performance | Security | Quality |
+
 ## Severity Definitions
 
 ### CRITICAL
@@ -100,6 +114,15 @@ Reviews should follow this priority order, focusing first on critical issues bef
 - [ ] **User Feedback**: User-facing errors are clear and actionable
 - [ ] **Cleanup**: Resources cleaned up on error paths
 
+### Silent Failure Patterns
+
+Pay specific attention to these error-handling anti-patterns:
+- Empty `except` or `except Exception: pass` blocks that swallow errors
+- Catch blocks that log but silently continue when the caller expects an exception
+- Returning default values (None, empty list, 0) on error without logging or raising
+- Retry logic that exhausts attempts without surfacing the underlying error
+- Broad exception handlers that catch unrelated errors (e.g., `except Exception` when only `ValueError` is expected)
+
 ### Data Consistency
 - [ ] **Transactions**: Database operations properly transacted
 - [ ] **Atomicity**: Related changes are atomic
@@ -149,6 +172,14 @@ Reviews should follow this priority order, focusing first on critical issues bef
 - [ ] **Fixtures**: Proper use of test fixtures/factories
 - [ ] **Organization**: Tests organized logically
 - [ ] **Performance**: Tests run quickly
+
+### Assessment Approach
+
+Evaluate behavioral coverage, not just whether test files exist. Ask: "Would these tests catch a meaningful regression if this code changed?" Focus on:
+- Critical paths that could cause data loss or security issues if broken
+- Edge cases for boundary conditions (null, empty, overflow)
+- Error handling paths — are failure modes tested, not just happy paths?
+- Avoid suggesting tests for trivial code unless it contains business logic
 
 ## Performance Considerations
 
@@ -318,20 +349,16 @@ User-facing application providing analytics, recommendations, and plugins:
 | `quantivly-sdk` | `box`, `ptbi`, `healthcheck` |
 | `auto-conf` templates | Rendered stack files |
 
-### Available GitHub MCP Tools
-- `github_get_file_contents` - Read specific files from any Quantivly repo
-- `github_search_code` - Search for code patterns across organization repos
-- `github_get_commit` - Get commit details for context
-- `github_list_commits` - List recent commits in a repository
-- `github_get_pull_request` - Get PR details from other repos
-- `github_list_pull_request_files` - See files changed in related PRs
-- `github_search_pull_requests` - Find related PRs across repos
+### How to Access Cross-Repo Files
+
+Use `gh api repos/quantivly/<repo>/contents/<path>` to fetch files from other repositories.
+Do not use GitHub MCP tools for cross-repo access — they are not configured in the review workflow. The `gh api` command with GET requests is the correct approach.
 
 ### Guidelines
 - Only access repositories within the `quantivly` organization
 - Use cross-repo context when reviewing changes to shared/exported code
 - Validate that API contracts are maintained across repositories
-- Don't use GitHub tools for files already in the PR diff
+- Don't fetch files that are already available in the PR diff — use the local checkout instead
 
 ## Healthcare/HIPAA Context
 
@@ -372,6 +399,6 @@ This document should evolve based on:
 
 ---
 
-**Last Updated**: 2026-02-05
+**Last Updated**: 2026-02-06
 **Owner**: Engineering Team
-**Related**: [Claude Integration Guide](claude-integration-guide.md), Repository CLAUDE.md files
+**Related**: [Claude Integration Guide](claude-integration-guide.md), [Review Examples](review-examples.md), Repository CLAUDE.md files

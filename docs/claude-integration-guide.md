@@ -1,7 +1,7 @@
 # Claude + GitHub Integration Guide
 
 **Version**: 1.0
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-02-06
 
 ---
 
@@ -120,7 +120,7 @@ Claude posts a **formal GitHub review** (not just a comment), which means:
 
 **Setup Required**: None (automatic for organization members)
 
-**Cost**: Paid by organization (~$0.50-1.00 per review)
+**Cost**: Paid by organization (~$0.10-3.00 per review depending on PR complexity — model is selected automatically)
 
 ### Recommended Workflow
 
@@ -339,7 +339,7 @@ pre-commit run --all-files
 
 ### Q: What does a review cost?
 
-**A**: ~$0.50-$1.00 per review on average. Quantivly covers the cost.
+**A**: Varies by PR complexity: ~$0.10-0.15 for docs/config (Haiku), ~$0.60-0.90 for standard code (Sonnet), ~$2-3 for large or security-sensitive PRs (Opus). Model selection is automatic. Quantivly covers the cost.
 
 ---
 
@@ -535,5 +535,5 @@ This gives you Linear context while writing code, not just during PR review.
 
 ---
 
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-02-06
 **Maintained by**: Engineering Team

@@ -429,11 +429,15 @@ Run: Automatically on PR push
 **Features**:
 - **Formal reviews**: Submits review events via `gh api` (APPROVE/REQUEST_CHANGES/COMMENT)
 - **Inline review comments**: Submitted as part of the review via GitHub Reviews API `comments` array
+- **Adaptive model selection**: Haiku for docs/config, Sonnet for standard code, Opus for large/security-sensitive PRs
+- **Adaptive comment caps**: Inline comment limit scales with diff size (min 3, max 12)
 - **Progress tracking**: Real-time tracking comment during review (auto-deleted after completion)
 - **Linear MCP integration**: Validates PR against issue requirements
-- **Custom reviewer instructions**: Extracted from `@claude` comments
+- **Custom reviewer instructions**: Extracted from `@claude` comments (wrapped in XML delimiters for safety)
+- **Few-shot review examples**: Concrete examples guide review calibration and output format
+- **Quality feedback**: Reaction prompt (👍/👎) in review footer for tracking review helpfulness
 
-**Cost**: ~$0.60-$0.90 per review (covered by organization)
+**Cost**: ~$0.10-$3.00 per review depending on PR complexity (covered by organization)
 
 **Security**: All API keys stored in organization secrets, passed via environment variables
 
@@ -507,6 +511,9 @@ claude
 ### Related Documentation
 
 - [Detailed Integration Guide](docs/claude-integration-guide.md) - Complete usage guide
+- [Review Standards](docs/review-standards.md) - Severity definitions, checklists, and quality criteria
+- [Review Examples](docs/review-examples.md) - Concrete examples of well-calibrated reviews
+- [Deploying Claude Review](docs/deploying-claude-review.md) - Setup guide for new repositories
 - [GitHub Actions Docs](https://docs.github.com/en/actions) - Workflow reference
 - [Linear API](https://developers.linear.app/) - API documentation
 

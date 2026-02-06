@@ -88,6 +88,22 @@ git push origin master
 
 ## Features
 
+### Adaptive Model Selection
+
+The workflow automatically selects the Claude model based on PR complexity:
+
+| PR Type | Model | Approximate Cost |
+|---------|-------|-----------------|
+| Docs/config only (`.md`, `.yml`, `.json`, etc.) | Haiku 4.5 | ~$0.10-0.15 |
+| Standard code changes (<500 lines) | Sonnet 4.5 | ~$0.60-0.90 |
+| Large diffs (>500 lines) or security-sensitive paths | Opus 4.6 | ~$2.00-3.00 |
+
+Security-sensitive paths are detected by filename patterns: `auth`, `security`, `login`, `password`, `token`, `session`, `permission`, `access`, `crypto`, `encrypt`, `hipaa`, `phi`.
+
+### Adaptive Comment Caps
+
+The maximum number of inline comments scales with PR size: `min(12, ceil(diff_lines / 50))`, with a minimum of 3. Small PRs get fewer comments (avoiding nitpicking), large PRs get more (ensuring thoroughness).
+
 ### Tool Capabilities
 
 The workflow uses built-in MCP servers and CLI tools:
@@ -309,12 +325,16 @@ git push origin master
 
 ## Cost Monitoring
 
-Each Claude review costs approximately **$0.60-$0.90** depending on PR size.
+Review costs vary by PR complexity due to adaptive model selection:
+- **Docs/config PRs**: ~$0.10-$0.15 (Haiku 4.5)
+- **Standard code PRs**: ~$0.60-$0.90 (Sonnet 4.5)
+- **Large/security PRs**: ~$2.00-$3.00 (Opus 4.6)
 
 **Monitor usage**:
-- Check workflow run logs for token metrics
+- Check workflow step summary for complexity assessment (model tier, diff lines, comment cap)
+- Check workflow run logs for token and cost metrics
 - Review [Actions tab](https://github.com/quantivly/<repo>/actions) for frequency
-- Set up billing alerts in GitHub organization settings
+- React with 👍/👎 on reviews to track quality over time
 
 **Best practices**:
 - Use `@claude` on PRs ready for formal review (not during active development)
@@ -340,6 +360,7 @@ Each Claude review costs approximately **$0.60-$0.90** depending on PR size.
 
 - [Claude Integration Guide](claude-integration-guide.md) - Complete usage guide
 - [Review Standards](review-standards.md) - What Claude reviews and how
+- [Review Examples](review-examples.md) - Concrete examples of well-calibrated reviews
 - [anthropics/claude-code-action](https://github.com/anthropics/claude-code-action) - Official action documentation
 - [GitHub Actions: Reusing Workflows](https://docs.github.com/en/actions/using-workflows/reusing-workflows) - Official documentation
 
