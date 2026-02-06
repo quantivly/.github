@@ -241,6 +241,7 @@ Quantivly has two complementary Claude review systems that use the same [review 
 - **Inline comments**: Feedback attached directly to specific lines in the diff
 - **Formal reviews**: Proper APPROVE/REQUEST_CHANGES/COMMENT events (not just comments)
 - **Cross-repo context**: Can fetch code from related Quantivly repositories
+- **Context-aware re-reviews**: Reads previous review findings, avoids repeating addressed feedback, focuses on new/changed code
 
 ### How to Use
 

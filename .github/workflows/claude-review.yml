@@ -146,6 +146,78 @@ jobs:
             }
             core.setOutput('custom', instructions);
 
+      - name: Fetch previous review context
+        id: previous-reviews
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.issue.number;
+            const repo = context.repo;
+
+            // Fetch all reviews on this PR
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: repo.owner,
+              repo: repo.repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
+
+            // Identify Claude reviews by the METRICS marker (same method as update-review-metrics step)
+            const claudeReviews = reviews.filter(r => (r.body || '').includes('<!-- METRICS -->'));
+
+            if (claudeReviews.length === 0) {
+              core.setOutput('context', '');
+              core.setOutput('count', '0');
+              console.log('No previous Claude reviews found');
+              return;
+            }
+
+            const reviewCount = claudeReviews.length;
+            const latest = claudeReviews[claudeReviews.length - 1];
+
+            // Extract body summary: strip the <sub> footer and cap length
+            let bodySummary = (latest.body || '').replace(/<sub>[\s\S]*?<\/sub>/g, '').trim();
+            if (bodySummary.length > 800) {
+              bodySummary = bodySummary.substring(0, 800) + '...';
+            }
+
+            // Fetch inline comments for the latest review
+            const { data: allComments } = await github.rest.pulls.listReviewComments({
+              owner: repo.owner,
+              repo: repo.repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
+
+            const reviewComments = allComments
+              .filter(c => c.pull_request_review_id === latest.id)
+              .map(c => {
+                const firstSentence = (c.body || '').split(/[.\n]/)[0].trim();
+                const entry = `- \`${c.path}:${c.line || c.original_line || '?'}\` ${firstSentence}`;
+                return entry.length > 120 ? entry.substring(0, 117) + '...' : entry;
+              });
+
+            // Build context string
+            const date = new Date(latest.submitted_at).toISOString().split('T')[0];
+            let contextStr = `Previous Claude reviews: ${reviewCount}\n`;
+            contextStr += `Latest review: ${date} (${latest.state})\n\n`;
+            contextStr += `### Latest Review Summary\n${bodySummary}\n`;
+
+            if (reviewComments.length > 0) {
+              contextStr += `\n### Latest Review Inline Findings (${reviewComments.length})\n`;
+              contextStr += reviewComments.join('\n');
+            }
+
+            // Hard cap at 4000 chars to control token budget
+            if (contextStr.length > 4000) {
+              contextStr = contextStr.substring(0, 3997) + '...';
+            }
+
+            core.setOutput('context', contextStr);
+            core.setOutput('count', String(reviewCount));
+            console.log(`Found ${reviewCount} previous Claude review(s). Context: ${contextStr.length} chars`);
+
       - name: Create MCP config for Linear
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
@@ -203,6 +275,12 @@ jobs:
             LINEAR ISSUE: ${{ steps.linear.outputs.linear_id || 'Not specified' }}
             CUSTOM FOCUS: ${{ steps.instructions.outputs.custom || 'None - standard review' }}
             PROGRESS_COMMENT_ID: ${{ steps.progress.outputs.comment_id }}
+            PREVIOUS_REVIEW_CONTEXT: ${{ steps.previous-reviews.outputs.context || 'None - this is the first review' }}
+            PREVIOUS_REVIEW_COUNT: ${{ steps.previous-reviews.outputs.count || '0' }}
+
+            ## Previous Review Context
+
+            ${{ steps.previous-reviews.outputs.context || 'None - this is the first review.' }}
 
             ## Your Role
 
@@ -226,9 +304,14 @@ jobs:
 
             1. Read `.github-org/docs/review-standards.md` and the repo's `CLAUDE.md`
             2. Run `gh pr diff $PR_NUMBER` to get the unified diff
-            3. Analyze the diff for security, logic, quality, testing, performance issues. Use `Read` for full file context when needed.
-            4. If Linear issue provided, fetch requirements and validate alignment
-            5. For each finding, note: file path, line number (from the new version of the file), severity, description
+            3. Check the PREVIOUS REVIEW CONTEXT above. If previous reviews exist:
+               - Note which files/lines had prior findings
+               - Compare against the current diff to determine if prior findings are on unchanged vs. changed code
+               - Prior findings on unchanged code should NOT be re-flagged as inline comments (they are already visible in the PR conversation)
+               - Focus inline comments on: (a) new code not previously reviewed, (b) code changed since the last review, (c) prior findings addressed incorrectly or incompletely
+            4. Analyze the diff for security, logic, quality, testing, performance issues. Before flagging any issue, use `Read` to see the full file context around the location — do not flag issues based solely on diff snippets.
+            5. If Linear issue provided, fetch requirements and validate alignment
+            6. For each finding, note: file path, line number (from the new version of the file), severity, description
 
             ---
 
@@ -299,6 +382,31 @@ jobs:
             - NEVER post test, probe, or placeholder reviews. Every API call must be intentional and final.
             - If you encounter permission errors with any tool, do NOT try alternative tools or workarounds. Proceed with what works.
             - `gh api` write operations are ONLY allowed for: (1) submitting the review (POST to reviews endpoint), (2) updating the progress comment (PATCH). No other writes.
+
+            ## Review Quality Standards
+
+            **Quality over quantity**: A review with 3 high-confidence findings is more useful than one with 10 uncertain ones. Filter aggressively.
+
+            **Confidence threshold**: Only flag issues you are confident about. If you're uncertain whether something is actually a problem — for example, if the pattern might be intentional, or the context is ambiguous — err on the side of not flagging it. Put uncertain observations in the review body summary rather than as inline comments.
+
+            **Verify before flagging**: Always read the full file context around the flagged location before including it in your review. Diff snippets can be misleading — a function that looks problematic in the diff may be correct when you see the surrounding code.
+
+            **Actionable findings**: Every inline comment must include a concrete fix suggestion. Don't just identify problems — propose solutions. Example:
+            - Good: "⚠️ This query interpolates user input. Use parameterized queries instead: `cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))`"
+            - Bad: "⚠️ This query might have a SQL injection issue"
+
+            **Silent failure patterns**: Pay specific attention to these error-handling anti-patterns:
+            - Empty `except` or `except Exception: pass` blocks that swallow errors
+            - Catch blocks that log but silently continue when the caller expects an exception
+            - Returning default values (None, empty list, 0) on error without logging or raising
+            - Retry logic that exhausts attempts without surfacing the underlying error
+            - Broad exception handlers that catch unrelated errors (e.g., `except Exception` when only `ValueError` is expected)
+
+            **Testing assessment**: Evaluate behavioral coverage, not just whether test files exist. Ask: "Would these tests catch a meaningful regression if this code changed?" Focus on:
+            - Critical paths that could cause data loss or security issues if broken
+            - Edge cases for boundary conditions (null, empty, overflow)
+            - Error handling paths — are failure modes tested, not just happy paths?
+            - Avoid suggesting tests for trivial code unless it contains business logic
 
             ## Quantivly Architecture
 
@@ -371,6 +479,8 @@ jobs:
 
             **Linear**: [Issue ID] - [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
 
+            **Prior reviews**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." If first review: omit this line.]
+
             **Issues**: [X critical, Y high, Z suggestions] — see inline comments
 
             **Highlights**:
@@ -383,6 +493,7 @@ jobs:
             ---
 
             **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be included in the `comments` array of the review JSON. The review `body` should only contain the template above — never detailed findings.
+            If previous reviews exist (PREVIOUS_REVIEW_COUNT > 0), prioritize new findings. Acknowledge addressed issues briefly in the summary. Only re-flag a prior finding as an inline comment if the fix attempt introduced a new problem.
             Start each inline comment body with a severity emoji and then the finding directly:
             - 🚨 for security and data loss issues (must fix)
             - ⚠️ for bugs and logic errors (should fix)
