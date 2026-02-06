@@ -225,9 +225,10 @@ jobs:
             **Step 1: Analyze**
 
             1. Read `.github-org/docs/review-standards.md` and the repo's `CLAUDE.md`
-            2. Analyze the PR diff for security, logic, quality, testing, performance issues
-            3. If Linear issue provided, fetch requirements and validate alignment
-            4. For each finding, note: file path, line number (from the NEW version in the diff), severity, description
+            2. Run `gh pr diff $PR_NUMBER` to get the unified diff — this is your primary reference for line numbers
+            3. Analyze the diff for security, logic, quality, testing, performance issues. Use `Read` for full file context when needed, but always get `line` values from the diff.
+            4. If Linear issue provided, fetch requirements and validate alignment
+            5. For each finding, note: file path, severity, description, and the **new-file line number from the diff** (the `+` side number in `@@ -a,b +LINE,count @@` hunk headers). If a finding is on a line not shown in the diff, attach the comment to the nearest diff-visible line and note "Near line X:" in the body.
 
             ---
 
@@ -255,7 +256,7 @@ jobs:
             Substitute the actual REPO and PR_NUMBER values from the context variables above.
 
             Rules for the JSON:
-            - `line` must reference a line visible in the pull request diff (new file version, right side)
+            - `line` must be a new-file line number visible in `gh pr diff` output (within a `@@` hunk range, `+` side)
             - `path` is relative to repo root (e.g., "src/auth/login.py")
             - `body` values must be valid JSON strings: escape `"` as `\"`, newlines as `\n`, backslashes as `\\`
             - `side` is always `"RIGHT"` for commenting on added/modified code
