@@ -510,13 +510,18 @@ jobs:
         if: always() && steps.extract-metrics.outputs.duration
         continue-on-error: true
         uses: actions/github-script@v7
+        env:
+          METRIC_DURATION: ${{ steps.extract-metrics.outputs.duration }}
+          METRIC_COST: ${{ steps.extract-metrics.outputs.cost }}
+          METRIC_TOKENS: ${{ steps.extract-metrics.outputs.tokens }}
+          METRIC_MODEL: ${{ steps.extract-metrics.outputs.model }}
         with:
           github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
-            const duration = '${{ steps.extract-metrics.outputs.duration }}';
-            const cost = '${{ steps.extract-metrics.outputs.cost }}';
-            const tokens = '${{ steps.extract-metrics.outputs.tokens }}';
-            const model = '${{ steps.extract-metrics.outputs.model }}';
+            const duration = process.env.METRIC_DURATION || '';
+            const cost = process.env.METRIC_COST || '';
+            const tokens = process.env.METRIC_TOKENS || '';
+            const model = process.env.METRIC_MODEL || '';
 
             // Build metrics string from available values
             const parts = [];
