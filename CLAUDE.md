@@ -423,12 +423,11 @@ Run: Automatically on PR push
 - Uses `anthropics/claude-code-action@v1` with built-in MCP servers
 
 **MCP Servers**:
-- `github_inline_comment` (built-in) - Inline PR comment tool (`create_inline_comment`)
 - Linear MCP (via `.mcp.json`) - Issue context and requirements validation
 
 **Features**:
 - **Formal reviews**: Submits review events via `gh api` (APPROVE/REQUEST_CHANGES/COMMENT)
-- **Inline review comments**: Uses built-in `create_inline_comment` for line-specific feedback on the diff
+- **Inline review comments**: Submitted as part of the review via GitHub Reviews API `comments` array
 - **Progress tracking**: Real-time tracking comment during review (auto-deleted after completion)
 - **Linear MCP integration**: Validates PR against issue requirements
 - **Custom reviewer instructions**: Extracted from `@claude` comments

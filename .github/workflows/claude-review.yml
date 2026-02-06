@@ -190,14 +190,13 @@ jobs:
           # Enable MCP servers from .mcp.json (provides Linear MCP auth config)
           settings: '{"enableAllProjectMcpServers": true}'
           # Allow tools for PR review:
-          # - Built-in inline comment MCP tool (one call per finding, no pending review needed)
-          #   Including this prefix activates the github_inline_comment MCP server in claude-code-action
           # - Linear MCP tools (issue context, requirements) via .mcp.json server
-          # - gh CLI for PR content, metadata, cross-repo file access, progress updates, and review submission
+          # - gh CLI for: reading PR data, cross-repo files, submitting batched review, progress updates
           # - File tools for reading codebase
           # - git for commit history context
+          # Review submission uses gh api POST to /reviews with comments array (single review event)
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+            --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
@@ -209,70 +208,96 @@ jobs:
 
             You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
 
-            ## Review Workflow (2 Phases)
+            ## Review Workflow (Single Submission)
 
-            Your review has two independent phases. Complete Phase 1 first, then Phase 2.
+            Your review is submitted as ONE gh api call — both the summary and all inline comments in a single request.
 
             ```
-            Phase 1: POST inline comments (one independent call per finding)
-                ↓
-            Phase 2: SUBMIT review event (single gh api call with short summary)
+            Step 1: ANALYZE — Read standards, diff, Linear context, collect findings
+            Step 2: SUBMIT — One gh api call with summary + inline comments array
             ```
 
-            **WRONG**: Writing findings in the review body instead of inline comments (readers can't see them on the diff)
-            **RIGHT**: Post each finding as an inline comment, then submit a short summary review
+            **WRONG**: Posting individual comments one at a time (creates separate review events per comment)
+            **RIGHT**: Collect ALL findings, then submit everything in one batched API call
 
             ---
 
-            **Phase 1: Post Inline Comments**
+            **Step 1: Analyze**
 
-            For EACH code finding, call `mcp__github_inline_comment__create_inline_comment`:
-            - path: File path relative to repo root (e.g., "src/auth/login.py")
-            - body: Comment with severity prefix (e.g., "🚨 **[CRITICAL]** SQL injection...")
-            - line: Line number in the NEW version of the file (right side of diff)
-            - side: "RIGHT" (default)
-
-            Each call is independent — no setup or teardown needed. Post ALL findings before Phase 2.
-            General observations that don't apply to a specific line go in the summary (Phase 2).
+            1. Read `.github-org/docs/review-standards.md` and the repo's `CLAUDE.md`
+            2. Analyze the PR diff for security, logic, quality, testing, performance issues
+            3. If Linear issue provided, fetch requirements and validate alignment
+            4. For each finding, note: file path, line number (from the NEW version in the diff), severity, description
 
             ---
 
-            **Phase 2: Submit Review Event**
+            **Step 2: Submit Review (Single API Call)**
 
-            After all inline comments are posted, submit a formal review event:
+            Submit ALL findings in one call using this exact structure:
+
             ```
-            gh api -X POST "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews" \
-              -f event="<EVENT>" \
-              -f body="<SUMMARY>"
+            gh api -X POST "repos/{REPO}/pulls/{PR_NUMBER}/reviews" --input - <<'REVIEW_JSON'
+            {
+              "event": "<EVENT>",
+              "body": "<REVIEW_SUMMARY>",
+              "comments": [
+                {
+                  "path": "<relative/file/path>",
+                  "line": <LINE_IN_NEW_FILE>,
+                  "side": "RIGHT",
+                  "body": "<SEVERITY_EMOJI> **[<SEVERITY>]** <FINDING>"
+                }
+              ]
+            }
+            REVIEW_JSON
             ```
+
+            Substitute the actual REPO and PR_NUMBER values from the context variables above.
+
+            Rules for the JSON:
+            - `line` must reference a line visible in the pull request diff (new file version, right side)
+            - `path` is relative to repo root (e.g., "src/auth/login.py")
+            - `body` values must be valid JSON strings: escape `"` as `\"`, newlines as `\n`, backslashes as `\\`
+            - `side` is always `"RIGHT"` for commenting on added/modified code
+            - General observations that don't apply to a specific line go in the review `body`, not in `comments`
 
             Choose event based on findings:
             - `REQUEST_CHANGES`: Has CRITICAL issues
             - `COMMENT`: Has HIGH issues or needs clarification
             - `APPROVE`: Only suggestions, no blockers
 
-            The body should be your review summary (see Output Format below).
+            ---
+
+            **If the review submission fails (e.g., 422 from invalid line number):**
+
+            Retry without the `comments` array — put all findings in the body as formatted text:
+            ```
+            gh api -X POST "repos/{REPO}/pulls/{PR_NUMBER}/reviews" \
+              -f event="<EVENT>" \
+              -f body="<FULL_REVIEW_WITH_ALL_FINDINGS>"
+            ```
+
+            Substitute the actual REPO and PR_NUMBER values from the context variables above.
 
             ## Tool Usage Rules
 
-            **For inline comments** (Phase 1):
-            - `mcp__github_inline_comment__create_inline_comment` — one call per finding, posted directly to the diff
-
-            **For the review event** (Phase 2):
-            - `gh api -X POST repos/.../pulls/.../reviews` — single call to submit the formal review
+            **For submitting the review (with inline comments):**
+            - `gh api -X POST repos/.../pulls/.../reviews --input -` with JSON containing event, body, and comments array
+            - This is the ONLY review submission — one call, all findings included
 
             **For reading data:**
             - `gh api` (GET) — read files from other repos, fetch PR metadata
-            - `gh pr` — read PR details
+            - `gh pr` — read PR details (title, description, files)
             - `Read` tool — read local files (e.g., `Read("CLAUDE.md")`). NEVER use Bash to read files.
 
             **For progress updates:**
             - `gh api -X PATCH repos/.../issues/comments/...` — update the progress comment
 
             **CONSTRAINTS:**
-            - NEVER post test, probe, or placeholder reviews. Every tool call must be intentional and final.
+            - Submit exactly ONE review per run. The batched gh api call IS the review — never post individual comments separately.
+            - NEVER post test, probe, or placeholder reviews. Every API call must be intentional and final.
             - If you encounter permission errors with any tool, do NOT try alternative tools or workarounds. Proceed with what works.
-            - `gh api` write operations are ONLY allowed for: (1) submitting the final review (POST to reviews endpoint), (2) updating the progress comment (PATCH). No other writes.
+            - `gh api` write operations are ONLY allowed for: (1) submitting the review (POST to reviews endpoint), (2) updating the progress comment (PATCH). No other writes.
 
             ## Quantivly Architecture
 
@@ -356,7 +381,7 @@ jobs:
 
             ---
 
-            **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be posted as inline comments via `create_inline_comment` in Phase 1. The review body (Phase 2) should only contain the template above — never detailed findings.
+            **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be included in the `comments` array of the review JSON. The review `body` should only contain the template above — never detailed findings.
             Use these severity emojis in inline comments:
             - 🚨 **[CRITICAL]** - Security, data loss, must fix
             - ⚠️ **[HIGH]** - Bugs, logic errors, should fix
@@ -387,7 +412,7 @@ jobs:
 
             ✅ Read review standards and repository context
             ✅ Analyzed code changes
-            ⏳ Composing review with inline comments...
+            ⏳ Composing review...
             ```
 
             Rules:
