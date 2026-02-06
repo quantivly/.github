@@ -490,7 +490,7 @@ jobs:
 
             **Linear**: [Issue ID] - [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
 
-            **Prior reviews**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." If first review: omit this line.]
+            **Prior reviews**: [If PREVIOUS_REVIEW_COUNT > 0: "Re-review #(PREVIOUS_REVIEW_COUNT + 1). X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line.]
 
             **Issues**: [X critical, Y high, Z suggestions] — see inline comments
 
