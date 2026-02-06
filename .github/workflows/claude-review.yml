@@ -151,7 +151,7 @@ jobs:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
           # Create .mcp.json with explicit auth headers for Linear MCP server
-          # The Linear plugin provides tools, but GitHub Actions needs explicit Bearer auth
+          # GitHub Actions needs explicit Bearer auth in .mcp.json
           # (locally, Claude Code auto-injects auth from env vars)
           if [ -n "$LINEAR_API_KEY" ]; then
             printf '{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp","headers":{"Authorization":"Bearer %s"}}}}' "$LINEAR_API_KEY" > .mcp.json
@@ -182,34 +182,22 @@ jobs:
         env:
           # Linear MCP server (via .mcp.json) uses env var for API authentication
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          # GitHub plugin reads from GH_TOKEN env var (using GH_ prefix since GitHub reserves GITHUB_)
+          # gh CLI reads from GH_TOKEN env var (using GH_ prefix since GitHub reserves GITHUB_)
           GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          # IMPORTANT: track_progress is intentionally NOT set (defaults to false)
-          # Setting it to true enables "tag mode" which filters MCP tools to only
-          # those matching mcp__github_* pattern - blocking our plugin review tools
-          # (mcp__plugin_github_github__*). Agent mode gives full tool access.
-          # Add official plugin marketplace (not pre-configured in GitHub Actions)
-          plugin_marketplaces: https://github.com/anthropics/claude-plugins-official.git
-          # Plugins:
-          # - github: Formal review tools (pull_request_review_write, add_comment_to_pending_review)
-          # Note: Linear MCP is provided via .mcp.json (not plugin) since GitHub Actions
-          # needs explicit auth headers that plugins cannot provide
-          plugins: github@claude-plugins-official
-          # Enable MCP servers from .mcp.json (provides auth that plugin config lacks)
+          # Enable MCP servers from .mcp.json (provides Linear MCP auth config)
           settings: '{"enableAllProjectMcpServers": true}'
           # Allow tools for PR review:
-          # - GitHub MCP plugin review tools (formal reviews with inline comments)
+          # - Built-in inline comment MCP tool (one call per finding, no pending review needed)
+          #   Including this prefix activates the github_inline_comment MCP server in claude-code-action
           # - Linear MCP tools (issue context, requirements) via .mcp.json server
-          # - gh CLI for PR content, metadata, cross-repo file access, and progress comment updates
-          #   NOTE: Prompt instructions restrict gh api to reads + progress comment PATCH only
-          #   (must use MCP tools for reviews and inline comments)
+          # - gh CLI for PR content, metadata, cross-repo file access, progress updates, and review submission
           # - File tools for reading codebase
           # - git for commit history context
           claude_args: |
-            --allowedTools "mcp__plugin_github_github__pull_request_review_write,mcp__plugin_github_github__add_comment_to_pending_review,mcp__plugin_github_github__pull_request_read,mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
@@ -221,82 +209,70 @@ jobs:
 
             You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
 
-            ## Review Workflow (CRITICAL - Follow These Steps IN ORDER)
+            ## Review Workflow (2 Phases)
 
-            You MUST post your review as a SINGLE GitHub review event with all inline comments attached.
-            This requires a strict 3-step sequence - DO NOT submit until all comments are added!
+            Your review has two independent phases. Complete Phase 1 first, then Phase 2.
 
             ```
-            Step 1: CREATE pending review (no submission yet)
+            Phase 1: POST inline comments (one independent call per finding)
                 ↓
-            Step 2: ADD all inline comments to pending review (one call per issue)
-                ↓
-            Step 3: SUBMIT the review (this publishes everything together)
+            Phase 2: SUBMIT review event (single gh api call with short summary)
             ```
 
-            **WRONG**: Submitting the review before adding comments (creates multiple review events)
-            **WRONG**: Using `gh api` for comments (breaks inline positioning)
             **WRONG**: Writing findings in the review body instead of inline comments (readers can't see them on the diff)
-            **RIGHT**: Create → Add all comments → Submit (single review with all comments)
+            **RIGHT**: Post each finding as an inline comment, then submit a short summary review
+
+            ---
+
+            **Phase 1: Post Inline Comments**
+
+            For EACH code finding, call `mcp__github_inline_comment__create_inline_comment`:
+            - path: File path relative to repo root (e.g., "src/auth/login.py")
+            - body: Comment with severity prefix (e.g., "🚨 **[CRITICAL]** SQL injection...")
+            - line: Line number in the NEW version of the file (right side of diff)
+            - side: "RIGHT" (default)
+
+            Each call is independent — no setup or teardown needed. Post ALL findings before Phase 2.
+            General observations that don't apply to a specific line go in the summary (Phase 2).
+
+            ---
+
+            **Phase 2: Submit Review Event**
+
+            After all inline comments are posted, submit a formal review event:
+            ```
+            gh api -X POST "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews" \
+              -f event="<EVENT>" \
+              -f body="<SUMMARY>"
+            ```
+
+            Choose event based on findings:
+            - `REQUEST_CHANGES`: Has CRITICAL issues
+            - `COMMENT`: Has HIGH issues or needs clarification
+            - `APPROVE`: Only suggestions, no blockers
+
+            The body should be your review summary (see Output Format below).
 
             ## Tool Usage Rules
 
-            **Use ONLY these MCP tools for reviews:**
-            - `mcp__plugin_github_github__pull_request_review_write` - create/submit reviews
-            - `mcp__plugin_github_github__add_comment_to_pending_review` - add inline comments
+            **For inline comments** (Phase 1):
+            - `mcp__github_inline_comment__create_inline_comment` — one call per finding, posted directly to the diff
 
-            **DO NOT use `gh api` for posting review comments** - it breaks inline positioning.
-            `gh api` is for reading data from other repositories and updating the progress comment. NEVER use it for creating reviews, posting new comments, or deleting anything.
+            **For the review event** (Phase 2):
+            - `gh api -X POST repos/.../pulls/.../reviews` — single call to submit the formal review
 
-            **CRITICAL CONSTRAINTS:**
-            - Call `pull_request_review_write` EXACTLY twice: once with `method: "create"` (Step 1) and once with `method: "submit_pending"` (Step 3). No other calls.
-            - NEVER post test, probe, or placeholder reviews. Every MCP tool call must be intentional and final.
-            - If you encounter permission errors with any tool, do NOT try alternative tools or workarounds. Use only the tools listed above and proceed with what works.
-            - Use the Read tool for local file access (e.g., `Read("CLAUDE.md")`). NEVER use Bash to read files.
-            - `gh api` may ONLY be used for: (1) reading files from other repos, (2) updating the progress comment via PATCH. No other write operations.
+            **For reading data:**
+            - `gh api` (GET) — read files from other repos, fetch PR metadata
+            - `gh pr` — read PR details
+            - `Read` tool — read local files (e.g., `Read("CLAUDE.md")`). NEVER use Bash to read files.
 
-            ---
+            **For progress updates:**
+            - `gh api -X PATCH repos/.../issues/comments/...` — update the progress comment
 
-            **Step 1: CREATE Pending Review (do NOT submit yet)**
-
-            Call `mcp__plugin_github_github__pull_request_review_write`:
-            - method: "create"
-            - owner: "${{ github.repository_owner }}"
-            - repo: "${{ github.event.repository.name }}"
-            - pullNumber: ${{ github.event.issue.number }}
-
-            ⚠️ Do NOT include "event" or "body" parameters - this keeps review pending for comments.
-
-            ---
-
-            **Step 2: ADD All Inline Comments (before submitting!)**
-
-            For EACH code issue, call `mcp__plugin_github_github__add_comment_to_pending_review`:
-            - owner: "${{ github.repository_owner }}"
-            - repo: "${{ github.event.repository.name }}"
-            - pullNumber: ${{ github.event.issue.number }}
-            - path: File path relative to repo root (e.g., "src/auth/login.py")
-            - body: Comment with severity prefix (e.g., "🚨 **[CRITICAL]** SQL injection...")
-            - line: Line number in NEW version (right side of diff)
-            - side: "RIGHT"
-            - subjectType: "LINE"
-
-            Add ALL comments before proceeding to Step 3. General observations go in the summary, not inline.
-
-            ---
-
-            **Step 3: SUBMIT the Review (only after all comments added)**
-
-            Call `mcp__plugin_github_github__pull_request_review_write`:
-            - method: "submit_pending"
-            - owner, repo, pullNumber: same as above
-            - event: Choose based on findings:
-              - "REQUEST_CHANGES": Has CRITICAL issues
-              - "COMMENT": Has HIGH issues or needs clarification
-              - "APPROVE": Only suggestions, no blockers
-            - body: Your review summary (see Output Format below)
-
-            ⚠️ This is the ONLY step that publishes. All Step 2 comments will be attached.
+            **CONSTRAINTS:**
+            - NEVER post test, probe, or placeholder reviews. Every tool call must be intentional and final.
+            - If you encounter permission errors with any tool, do NOT try alternative tools or workarounds. Proceed with what works.
+            - `gh api` write operations are ONLY allowed for: (1) submitting the final review (POST to reviews endpoint), (2) updating the progress comment (PATCH). No other writes.
 
             ## Quantivly Architecture
 
@@ -380,7 +356,7 @@ jobs:
 
             ---
 
-            **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be posted as inline comments via `add_comment_to_pending_review` in Step 2. The summary body should only contain the template above — never detailed findings.
+            **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be posted as inline comments via `create_inline_comment` in Phase 1. The review body (Phase 2) should only contain the template above — never detailed findings.
             Use these severity emojis in inline comments:
             - 🚨 **[CRITICAL]** - Security, data loss, must fix
             - ⚠️ **[HIGH]** - Bugs, logic errors, should fix
@@ -405,7 +381,7 @@ jobs:
             ⏳ Analyzing code changes...
             ```
 
-            **After analyzing the diff, before creating the review:**
+            **After analyzing the diff, before posting inline comments:**
             ```
             🤖 **Claude review in progress...**
 
