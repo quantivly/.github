@@ -246,7 +246,7 @@ jobs:
                   "path": "src/auth/login.py",
                   "line": 42,
                   "side": "RIGHT",
-                  "body": "⚠️ Example: missing input validation"
+                  "body": "⚠️ This endpoint accepts user input without validation, which could allow malformed data into the database"
                 }
               ]
             }
@@ -383,10 +383,11 @@ jobs:
             ---
 
             **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be included in the `comments` array of the review JSON. The review `body` should only contain the template above — never detailed findings.
-            Use these severity emojis in inline comments:
-            - 🚨 (critical) - Security, data loss, must fix
-            - ⚠️ (high) - Bugs, logic errors, should fix
-            - 💡 (suggestion) - Improvements, nice to have
+            Start each inline comment body with a severity emoji and then the finding directly:
+            - 🚨 for security and data loss issues (must fix)
+            - ⚠️ for bugs and logic errors (should fix)
+            - 💡 for improvements (nice to have)
+            Example: "🚨 User input is interpolated into the SQL query without parameterization"
 
             ## Progress Updates (Optional, Non-Blocking)
 
