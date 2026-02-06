@@ -225,10 +225,10 @@ jobs:
             **Step 1: Analyze**
 
             1. Read `.github-org/docs/review-standards.md` and the repo's `CLAUDE.md`
-            2. Run `gh pr diff $PR_NUMBER` to get the unified diff — this is your primary reference for line numbers
-            3. Analyze the diff for security, logic, quality, testing, performance issues. Use `Read` for full file context when needed, but always get `line` values from the diff.
+            2. Run `gh pr diff $PR_NUMBER` to get the unified diff
+            3. Analyze the diff for security, logic, quality, testing, performance issues. Use `Read` for full file context when needed.
             4. If Linear issue provided, fetch requirements and validate alignment
-            5. For each finding, note: file path, severity, description, and the **new-file line number from the diff** (the `+` side number in `@@ -a,b +LINE,count @@` hunk headers). If a finding is on a line not shown in the diff, attach the comment to the nearest diff-visible line and note "Near line X:" in the body.
+            5. For each finding, determine the `line` number for the inline comment. The `line` is the line number in the new version of the file. You can get this from the `Read` tool (which shows line numbers), or by counting from the diff hunk header (`@@ -a,b +START,count @@` means the first line shown is START). Every inline comment MUST have a numeric `line` value — never omit it.
 
             ---
 
@@ -243,10 +243,10 @@ jobs:
               "body": "<REVIEW_SUMMARY>",
               "comments": [
                 {
-                  "path": "<relative/file/path>",
-                  "line": <LINE_IN_NEW_FILE>,
+                  "path": "src/auth/login.py",
+                  "line": 42,
                   "side": "RIGHT",
-                  "body": "<SEVERITY_EMOJI> **[<SEVERITY>]** <FINDING>"
+                  "body": "⚠️ **[HIGH]** Example: missing input validation"
                 }
               ]
             }
@@ -256,7 +256,7 @@ jobs:
             Substitute the actual REPO and PR_NUMBER values from the context variables above.
 
             Rules for the JSON:
-            - `line` must be a new-file line number visible in `gh pr diff` output (within a `@@` hunk range, `+` side)
+            - `line` is REQUIRED for every comment — it must be an integer (the line number in the new file). Never omit it or set it to null.
             - `path` is relative to repo root (e.g., "src/auth/login.py")
             - `body` values must be valid JSON strings: escape `"` as `\"`, newlines as `\n`, backslashes as `\\`
             - `side` is always `"RIGHT"` for commenting on added/modified code
