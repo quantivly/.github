@@ -538,30 +538,24 @@ jobs:
             const metricsStr = ' · ' + parts.join(' · ');
             console.log(`Metrics string: ${metricsStr}`);
 
-            // Find the most recent review from Claude[bot] or github-actions[bot]
+            // Find the most recent review containing our metrics marker
             const { data: reviews } = await github.rest.pulls.listReviews({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
+              per_page: 100,
             });
 
             const claudeReview = reviews
-              .filter(r => {
-                const login = r.user?.login || '';
-                return login.includes('claude') || login === 'github-actions[bot]';
-              })
+              .filter(r => (r.body || '').includes('<!-- METRICS -->'))
               .pop();
 
             if (!claudeReview) {
-              console.log('No Claude review found to update');
+              console.log('No review with metrics marker found');
               return;
             }
 
-            const body = claudeReview.body || '';
-            if (!body.includes('<!-- METRICS -->')) {
-              console.log('Review does not contain metrics marker');
-              return;
-            }
+            const body = claudeReview.body;
 
             const updatedBody = body.replace('<!-- METRICS -->', metricsStr);
 
