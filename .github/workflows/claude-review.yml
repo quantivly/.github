@@ -378,7 +378,7 @@ jobs:
             - ✅ [Another positive]
 
             ---
-            <sub>@${{ github.event.comment.user.login }} · [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+            <sub>@${{ github.event.comment.user.login }}<!-- METRICS --> · [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
 
             ---
 
@@ -421,6 +421,155 @@ jobs:
             - If an update fails, ignore the error and continue with the review. Progress updates are nice-to-have.
             - Do NOT update more than twice. Do NOT update after submitting the review (cleanup is handled automatically).
 
+      - name: Extract execution metrics
+        id: extract-metrics
+        if: always() && steps.claude-review.outputs.execution_file
+        continue-on-error: true
+        env:
+          EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
+        run: |
+          if [ ! -f "$EXECUTION_FILE" ]; then
+            echo "Execution file not found: $EXECUTION_FILE"
+            exit 0
+          fi
+
+          # Cost: from the result turn's total_cost_usd (pre-computed by the SDK)
+          COST=$(jq -r '
+            [.[] | select(.type == "result")] | last //empty |
+            (.total_cost_usd // .cost_usd // empty)
+          ' "$EXECUTION_FILE" 2>/dev/null)
+          if [ -n "$COST" ] && [ "$COST" != "null" ]; then
+            COST_FMT=$(printf '$%.2f' "$COST")
+            echo "cost=$COST_FMT" >> "$GITHUB_OUTPUT"
+            echo "Cost: $COST_FMT"
+          fi
+
+          # Duration: from the result turn's duration_ms (pre-computed by the SDK)
+          DURATION_MS=$(jq -r '
+            [.[] | select(.type == "result")] | last //empty |
+            .duration_ms // empty
+          ' "$EXECUTION_FILE" 2>/dev/null)
+          if [ -n "$DURATION_MS" ] && [ "$DURATION_MS" != "null" ]; then
+            TOTAL_SEC=$(( DURATION_MS / 1000 ))
+            if [ "$TOTAL_SEC" -ge 60 ]; then
+              MINS=$(( TOTAL_SEC / 60 ))
+              SECS=$(( TOTAL_SEC % 60 ))
+              DURATION_FMT="${MINS}m ${SECS}s"
+            else
+              DURATION_FMT="${TOTAL_SEC}s"
+            fi
+            echo "duration=$DURATION_FMT" >> "$GITHUB_OUTPUT"
+            echo "Duration: $DURATION_FMT"
+          fi
+
+          # Tokens: sum usage across all assistant turns
+          TOKENS=$(jq '
+            [.[] | select(.type == "assistant") | .message.usage // empty |
+              ((.input_tokens // 0) + (.output_tokens // 0) +
+               (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0))
+            ] | add // 0
+          ' "$EXECUTION_FILE" 2>/dev/null)
+          if [ -n "$TOKENS" ] && [ "$TOKENS" != "null" ] && [ "$TOKENS" -gt 0 ] 2>/dev/null; then
+            if [ "$TOKENS" -ge 1000000 ]; then
+              # e.g. 1234567 -> "1.2M tokens"
+              TOKENS_FMT="$(echo "$TOKENS" | awk '{printf "%.1fM", $1/1000000}') tokens"
+            elif [ "$TOKENS" -ge 1000 ]; then
+              # e.g. 42300 -> "42k tokens"
+              TOKENS_FMT="$(echo "$TOKENS" | awk '{printf "%.0fk", $1/1000}') tokens"
+            else
+              TOKENS_FMT="${TOKENS} tokens"
+            fi
+            echo "tokens=$TOKENS_FMT" >> "$GITHUB_OUTPUT"
+            echo "Tokens: $TOKENS_FMT"
+          fi
+
+          # Model: from the system init message
+          MODEL_ID=$(jq -r '
+            [.[] | select(.type == "system" and .subtype == "init")] | first //empty |
+            .model // empty
+          ' "$EXECUTION_FILE" 2>/dev/null)
+          if [ -n "$MODEL_ID" ] && [ "$MODEL_ID" != "null" ]; then
+            # Map model IDs to human-readable names
+            case "$MODEL_ID" in
+              *opus-4-6*)        MODEL_NAME="Opus 4.6" ;;
+              *opus-4*)          MODEL_NAME="Opus 4" ;;
+              *sonnet-4-5*)      MODEL_NAME="Sonnet 4.5" ;;
+              *sonnet-4*)        MODEL_NAME="Sonnet 4" ;;
+              *haiku-4-5*)       MODEL_NAME="Haiku 4.5" ;;
+              *haiku-4*)         MODEL_NAME="Haiku 4" ;;
+              *sonnet*3-5*)      MODEL_NAME="Sonnet 3.5" ;;
+              *haiku*3-5*)       MODEL_NAME="Haiku 3.5" ;;
+              *)                 MODEL_NAME="$MODEL_ID" ;;
+            esac
+            echo "model=$MODEL_NAME" >> "$GITHUB_OUTPUT"
+            echo "Model: $MODEL_NAME"
+          fi
+
+      - name: Update review footer with metrics
+        id: update-review-metrics
+        if: always() && steps.extract-metrics.outputs.duration
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            const duration = '${{ steps.extract-metrics.outputs.duration }}';
+            const cost = '${{ steps.extract-metrics.outputs.cost }}';
+            const tokens = '${{ steps.extract-metrics.outputs.tokens }}';
+            const model = '${{ steps.extract-metrics.outputs.model }}';
+
+            // Build metrics string from available values
+            const parts = [];
+            if (duration) parts.push(duration);
+            if (cost) parts.push(cost);
+            if (tokens) parts.push(tokens);
+            if (model) parts.push(model);
+
+            if (parts.length === 0) {
+              console.log('No metrics to inject');
+              return;
+            }
+
+            const metricsStr = ' · ' + parts.join(' · ');
+            console.log(`Metrics string: ${metricsStr}`);
+
+            // Find the most recent review from Claude[bot] or github-actions[bot]
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const claudeReview = reviews
+              .filter(r => {
+                const login = r.user?.login || '';
+                return login.includes('claude') || login === 'github-actions[bot]';
+              })
+              .pop();
+
+            if (!claudeReview) {
+              console.log('No Claude review found to update');
+              return;
+            }
+
+            const body = claudeReview.body || '';
+            if (!body.includes('<!-- METRICS -->')) {
+              console.log('Review does not contain metrics marker');
+              return;
+            }
+
+            const updatedBody = body.replace('<!-- METRICS -->', metricsStr);
+
+            await github.rest.pulls.updateReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              review_id: claudeReview.id,
+              body: updatedBody,
+            });
+
+            console.log(`Updated review ${claudeReview.id} with metrics`);
+
       - name: Clean up tracking comment
         if: always() && steps.progress.outputs.comment_id
         continue-on-error: true
@@ -462,6 +611,10 @@ jobs:
           LINEAR_ID: ${{ steps.linear.outputs.linear_id }}
           CUSTOM_INSTRUCTIONS: ${{ steps.instructions.outputs.custom }}
           PROGRESS_COMMENT_ID: ${{ steps.progress.outputs.comment_id }}
+          METRIC_DURATION: ${{ steps.extract-metrics.outputs.duration || 'N/A' }}
+          METRIC_COST: ${{ steps.extract-metrics.outputs.cost || 'N/A' }}
+          METRIC_TOKENS: ${{ steps.extract-metrics.outputs.tokens || 'N/A' }}
+          METRIC_MODEL: ${{ steps.extract-metrics.outputs.model || 'N/A' }}
         run: |
           echo "### Claude Review Metrics" >> $GITHUB_STEP_SUMMARY
           echo "- PR: #${PR_NUMBER}" >> $GITHUB_STEP_SUMMARY
@@ -471,3 +624,9 @@ jobs:
           echo "- Custom Focus: ${CUSTOM_INSTRUCTIONS:-Standard review}" >> $GITHUB_STEP_SUMMARY
           echo "- Progress Comment ID: ${PROGRESS_COMMENT_ID:-N/A}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Execution Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- Duration: ${METRIC_DURATION}" >> $GITHUB_STEP_SUMMARY
+          echo "- Cost: ${METRIC_COST}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tokens: ${METRIC_TOKENS}" >> $GITHUB_STEP_SUMMARY
+          echo "- Model: ${METRIC_MODEL}" >> $GITHUB_STEP_SUMMARY
