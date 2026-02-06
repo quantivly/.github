@@ -216,7 +216,6 @@ ls -la .github/workflows/claude-review.yml
 secrets:
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ### Linear MCP Not Connecting

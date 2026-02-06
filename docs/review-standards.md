@@ -173,51 +173,33 @@ Reviews should follow this priority order, focusing first on critical issues bef
 
 ## Output Format for Reviews
 
-Reviews should follow this structure for consistency:
+The review body should be a concise summary. Code-specific findings (CRITICAL, HIGH, Suggestion) are posted as inline comments on the PR diff — not in the review body.
 
 ```markdown
-## Summary
-[2-3 sentence overview of PR and overall assessment]
+**Summary**: [1-2 sentences: what the PR does]
 
-## Alignment with Linear Requirements
-[Requirement validation if Linear issue referenced]
-[Linear issue quality feedback if applicable - ADVISORY ONLY]
+**Linear**: [Issue ID] - [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
 
-## Critical Issues (Must Fix Before Merge)
-[List ONLY if found, with specific locations and fixes]
-1. **[Category]**: [Description]
-   - **Location**: `file.py:123-145`
-   - **Finding**: [What is wrong]
-   - **Risk**: [Why this matters]
-   - **Fix**: [Concrete recommendation with code example]
-   - **Severity**: CRITICAL | HIGH
+**Prior reviews**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
-[If none: "No critical issues identified"]
+**Issues**: [X critical, Y high, Z suggestions] — see inline comments
 
-## Suggestions (Should Consider)
-[Non-blocking improvements]
-1. **[Category]**: [Description]
-   - **Location**: `file.py:456`
-   - **Current**: [What exists]
-   - **Suggested**: [Alternative approach]
-   - **Benefit**: [Why this helps]
-
-[If none: "No significant suggestions"]
-
-## Positive Observations
-[2-3 good patterns or practices observed]
-- [Specific positive finding with location]
-
-## Testing Assessment
-- **Coverage**: [Assessment of test completeness]
-- **Edge Cases**: [Which edge cases are/aren't tested]
-- **Quality**: [Test quality observations]
-
-## Recommendation
-**[APPROVE | REQUEST_CHANGES | COMMENT]**
-
-[1-2 sentence justification]
+**Highlights**:
+- ✅ [Notable good practice]
+- ✅ [Another positive]
 ```
+
+**Review event** is chosen based on findings:
+- `REQUEST_CHANGES`: Has CRITICAL issues
+- `COMMENT`: Has HIGH issues or needs clarification
+- `APPROVE`: Only suggestions, no blockers
+
+**Inline comments** use severity emoji prefixes:
+- 🚨 for security and data loss issues (must fix)
+- ⚠️ for bugs and logic errors (should fix)
+- 💡 for improvements (nice to have)
+
+Each inline comment must include a concrete fix suggestion. Project-level observations (Linear misalignment, PR scope, architectural direction) belong in the review body, not as inline comments.
 
 ## Review Guidelines
 

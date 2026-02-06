@@ -43,6 +43,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // workflow_call events have no comment payload — the caller workflow
+            // handles its own filtering, so we trust it and skip permission checks.
+            if (context.eventName === 'workflow_call') {
+              console.log('Triggered via workflow_call — permission check handled by caller');
+              return true;
+            }
+
             const commenter = context.payload.comment.user.login;
             const repo = context.repo;
 
@@ -83,13 +90,9 @@ jobs:
               body: '⚠️ Claude reviews are only available to organization members and repository collaborators with write access.'
             });
 
-      - name: Exit if permission denied
-        if: steps.validate.outputs.result == 'false'
-        run: exit 0
-
       - name: Generate GitHub App token
         id: app-token
-        if: vars.CLAUDE_APP_ID != ''
+        if: steps.validate.outputs.result != 'false' && vars.CLAUDE_APP_ID != ''
         uses: actions/create-github-app-token@v2
         continue-on-error: true
         with:
@@ -98,9 +101,11 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout repository
+        if: steps.validate.outputs.result != 'false'
         uses: actions/checkout@v4
 
       - name: Checkout .github repository for review standards
+        if: steps.validate.outputs.result != 'false'
         uses: actions/checkout@v4
         with:
           repository: quantivly/.github
@@ -111,6 +116,7 @@ jobs:
 
       - name: Extract Linear issue ID
         id: linear
+        if: steps.validate.outputs.result != 'false'
         uses: actions/github-script@v7
         with:
           script: |
@@ -125,6 +131,7 @@ jobs:
 
       - name: Extract custom instructions
         id: instructions
+        if: steps.validate.outputs.result != 'false'
         uses: actions/github-script@v7
         with:
           script: |
@@ -148,6 +155,7 @@ jobs:
 
       - name: Fetch previous review context
         id: previous-reviews
+        if: steps.validate.outputs.result != 'false'
         uses: actions/github-script@v7
         env:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
@@ -230,6 +238,7 @@ jobs:
             console.log(`Found ${reviewCount} previous Claude review(s). Context: ${contextStr.length} chars`);
 
       - name: Create MCP config for Linear
+        if: steps.validate.outputs.result != 'false'
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: |
@@ -261,6 +270,7 @@ jobs:
 
       - name: Run Claude PR Review
         id: claude-review
+        if: steps.validate.outputs.result != 'false'
         uses: anthropics/claude-code-action@v1
         env:
           # Linear MCP server (via .mcp.json) uses env var for API authentication
@@ -270,7 +280,9 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          # Enable MCP servers from .mcp.json (provides Linear MCP auth config)
+          # Enable MCP servers from .mcp.json (created by the "Create MCP config" step above).
+          # Since the workflow generates .mcp.json with only the Linear server, this is
+          # effectively scoped to Linear — repo-level .mcp.json files are overwritten.
           settings: '{"enableAllProjectMcpServers": true}'
           # Allow tools for PR review:
           # - Linear MCP tools (issue context, requirements) via .mcp.json server
@@ -280,6 +292,7 @@ jobs:
           # Review submission uses gh api POST to /reviews with comments array (single review event)
           claude_args: |
             --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+            --max-turns 25
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
@@ -296,6 +309,14 @@ jobs:
             ## Your Role
 
             You are an expert code reviewer for Quantivly, a healthcare technology company building HIPAA-compliant analytics software.
+
+            ## Constraints
+
+            - Submit exactly ONE review per run. The batched gh api call IS the review — never post individual comments separately.
+            - NEVER post test, probe, or placeholder reviews. Every API call must be intentional and final.
+            - Maximum 12 inline comments per review. If you find more issues, include only the highest-severity findings as inline comments and summarize the rest in the review body.
+            - If you encounter permission errors with any tool, do NOT try alternative tools or workarounds. Proceed with what works.
+            - `gh api` write operations are ONLY allowed for: (1) submitting the review (POST to reviews endpoint), (2) updating the progress comment (PATCH). No other writes.
 
             ## Review Workflow (Single Submission)
 
@@ -389,12 +410,6 @@ jobs:
             **For progress updates:**
             - `gh api -X PATCH repos/.../issues/comments/...` — update the progress comment
 
-            **CONSTRAINTS:**
-            - Submit exactly ONE review per run. The batched gh api call IS the review — never post individual comments separately.
-            - NEVER post test, probe, or placeholder reviews. Every API call must be intentional and final.
-            - If you encounter permission errors with any tool, do NOT try alternative tools or workarounds. Proceed with what works.
-            - `gh api` write operations are ONLY allowed for: (1) submitting the review (POST to reviews endpoint), (2) updating the progress comment (PATCH). No other writes.
-
             ## Review Quality Standards
 
             **Quality over quantity**: A review with 3 high-confidence findings is more useful than one with 10 uncertain ones. Filter aggressively.
@@ -420,32 +435,9 @@ jobs:
             - Error handling paths — are failure modes tested, not just happy paths?
             - Avoid suggesting tests for trivial code unless it contains business logic
 
-            ## Quantivly Architecture
-
-            Two-layer architecture: platform provides foundational data infrastructure, hub provides user-facing analytics portal.
-
-            **platform** (quantivly-dockers) - Core DICOM/RIS backbone
-            | Component | Role | Depends On |
-            |-----------|------|------------|
-            | box | DICOM harmonization (GE/Philips/Siemens), RIS integration | quantivly-sdk |
-            | ptbi | DICOM networking (Python+Java/dcm4che) | quantivly-sdk |
-            | auto-conf | Jinja2 stack generator (configures platform AND hub) | — |
-            | quantivly-sdk | Python SDK for platform services | — |
-
-            **hub** (hub repo) - Healthcare analytics portal
-            | Repository | Role | Depends On |
-            |------------|------|------------|
-            | sre-core | Django backend (GraphQL API, plugin system) | sre-sdk |
-            | sre-ui | Next.js frontend | sre-core GraphQL |
-            | sre-event-bridge | WAMP→REST bridge | sre-sdk |
-            | sre-postgres | PostgreSQL database | — |
-            | sre-sdk | Python SDK for hub services | — |
-
-            **Connection**: Hub integrates with platform's backbone (Keycloak auth, WAMP router, shared networking). Platform's auto-conf generates deployment configs for both ecosystems.
-
             ## Review Standards
 
-            Read `.github-org/docs/review-standards.md` for severity levels, checklists, and output format.
+            Read `.github-org/docs/review-standards.md` for severity levels, checklists, output format, and Quantivly's repository architecture.
             Also read the repository's `CLAUDE.md` if it exists.
 
             ## Linear Integration
