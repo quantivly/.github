@@ -498,6 +498,11 @@ claude
 - Check issue exists and is accessible in Linear
 - Review continues without Linear context if not found
 
+**Inline comments appear as file-level**:
+- GitHub's Reviews API returns `line: null` in GET responses even when comments are correctly positioned on diff lines — this is normal
+- Always verify comment positioning in the PR page UI, not from API responses
+- If comments truly aren't positioned, check that the `line` value in the submitted JSON is an integer within a diff hunk range
+
 ### Related Documentation
 
 - [Detailed Integration Guide](docs/claude-integration-guide.md) - Complete usage guide
@@ -570,6 +575,11 @@ claude
 7. **Branch Protection**: `master` branch should have protection rules requiring review for profile changes.
 
 8. **Marketing Coordination**: Profile README changes should be coordinated with marketing team to ensure consistent messaging.
+
+9. **Review Prompt Editing**: The `prompt:` field in `claude-review.yml` is the most frequently edited part of this repo. When modifying it:
+   - Use concrete examples in JSON templates (e.g., `"line": 42`) instead of abstract placeholders — LLMs produce better output with realistic examples
+   - Avoid emphatic/scary constraint language (e.g., "CRITICAL — doing X causes Y") — this causes the model to take fallback paths and avoid the desired behavior entirely. Use factual, concise guidance instead.
+   - Test on a real PR after pushing (trigger with `@claude` on any open PR) and verify results in the PR page UI
 
 ## Git Workflow
 
