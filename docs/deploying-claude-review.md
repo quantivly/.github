@@ -20,7 +20,7 @@ The review system was migrated from a custom Python script to the official `anth
 | Feature | v1.0 (Custom Python) | v2.0 (Official Action) |
 |---------|---------------------|------------------------|
 | Review Engine | Custom `claude-review.py` | `anthropics/claude-code-action@v1` |
-| Inline Comments | Manual position mapping | Built-in `mcp__github_inline_comment` |
+| Inline Comments | Manual position mapping | Batched via GitHub Reviews API `comments` array |
 | Plugins | None | `pr-review-toolkit`, `superpowers` |
 | Progress Tracking | None | Built-in with checkboxes |
 | Retry Logic | Custom retry wrapper | Built-in |
@@ -92,10 +92,10 @@ git push origin master
 
 The workflow uses built-in MCP servers and CLI tools:
 
-**github_inline_comment** (built-in MCP server):
-- Posts inline comments directly on specific diff lines
-- One independent call per finding (no pending review workflow)
-- Activated automatically when `mcp__github_inline_comment__*` is in `allowedTools`
+**Batched Review API** (via `gh api`):
+- Submits review event with all inline comments in a single API call
+- Comments attached directly to specific diff lines
+- Uses GitHub Reviews API `POST /repos/.../pulls/.../reviews` with `comments` array
 
 **Linear MCP** (via `.mcp.json`):
 - Fetches issue description and acceptance criteria
@@ -330,7 +330,7 @@ Each Claude review costs approximately **$0.60-$0.90** depending on PR size.
 | Trigger | PR comment | CLI session |
 | Posting | Automatic | User approval required |
 | Cost | Organization-paid | Developer-paid |
-| MCP Servers | `github_inline_comment` (built-in), Linear | All installed plugins/MCP servers |
+| MCP Servers | Linear | All installed plugins/MCP servers |
 | Flexibility | Standardized | Full customization |
 
 **Use GitHub Actions when**: PR is ready for formal review before requesting human review.
