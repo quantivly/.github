@@ -355,6 +355,7 @@ jobs:
             - `body` values must be valid JSON strings: escape `"` as `\"`, newlines as `\n`, backslashes as `\\`
             - `side` is always `"RIGHT"` for commenting on added/modified code
             - General observations that don't apply to a specific line go in the review `body`, not in `comments`
+            - Inline comments must be about specific code at the referenced line (logic flaws, security vulnerabilities, bugs, improvements). Project-level observations — Linear issue status, PR scope/direction, overall test coverage gaps, architectural concerns — belong in the review `body` regardless of severity. If no code-specific findings exist, the `comments` array should be empty.
 
             Choose event based on findings:
             - `REQUEST_CHANGES`: Has CRITICAL issues
@@ -503,8 +504,9 @@ jobs:
 
             ---
 
-            **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be included in the `comments` array of the review JSON. The review `body` should only contain the template above — never detailed findings.
+            **IMPORTANT**: Keep the summary SHORT. All **code-specific** findings (CRITICAL, HIGH, Suggestion) MUST be in the `comments` array — each must reference a specific line and be directly relevant to the code at that line. Project-level findings (Linear misalignment, PR scope issues, missing test files, architectural direction) belong in the review `body` only, even at CRITICAL severity. If the only findings are project-level, submit with an empty `comments` array.
             If previous reviews exist (PREVIOUS_REVIEW_COUNT > 0), prioritize new findings. Acknowledge addressed issues briefly in the summary. Only re-flag a prior finding as an inline comment if the fix attempt introduced a new problem.
+            On re-reviews where no code has changed since the last review, do not re-flag the same findings as new inline comments. If the only observation is a previously-reported project-level issue (e.g., Linear misalignment already noted in a prior review), submit a brief body-only COMMENT review stating there are no new code findings, rather than attaching repeated observations to arbitrary lines.
             Start each inline comment body with a severity emoji and then the finding directly:
             - 🚨 for security and data loss issues (must fix)
             - ⚠️ for bugs and logic errors (should fix)
