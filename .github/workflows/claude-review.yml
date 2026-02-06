@@ -112,6 +112,7 @@ jobs:
           path: .github-org
           sparse-checkout: |
             docs/review-standards.md
+            docs/review-examples.md
           fetch-depth: 1
 
       - name: Extract Linear issue ID
@@ -252,6 +253,63 @@ jobs:
             echo "LINEAR_API_KEY not set, skipping MCP config"
           fi
 
+      - name: Assess PR complexity
+        id: complexity
+        if: steps.validate.outputs.result != 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number;
+            const repo = context.repo;
+
+            // Get diff stats for the PR
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: repo.owner,
+              repo: repo.repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
+
+            const totalAdditions = files.reduce((sum, f) => sum + f.additions, 0);
+            const totalDeletions = files.reduce((sum, f) => sum + f.deletions, 0);
+            const diffLines = totalAdditions + totalDeletions;
+            const fileCount = files.length;
+            const filenames = files.map(f => f.filename);
+
+            console.log(`PR stats: ${diffLines} diff lines across ${fileCount} files`);
+
+            // Check if PR is docs/config-only
+            const docsConfigExtensions = /\.(md|yml|yaml|json|txt|toml|cfg|ini|env\.example)$/;
+            const isDocsConfigOnly = filenames.every(f => docsConfigExtensions.test(f));
+
+            // Check if PR touches security-sensitive paths
+            const securityPaths = /(auth|security|login|password|token|session|permission|access|crypto|encrypt|hipaa|phi)/i;
+            const touchesSecurity = filenames.some(f => securityPaths.test(f));
+
+            // Model selection: docs/config → haiku, large/security → opus, default → sonnet
+            // Model IDs are mapped here so claude_args can use --model directly
+            const modelMap = {
+              haiku: 'claude-haiku-4-5-20251001',
+              sonnet: 'claude-sonnet-4-5-20250929',
+              opus: 'claude-opus-4-6-20250911',
+            };
+            let modelTier = 'sonnet';
+            if (isDocsConfigOnly) {
+              modelTier = 'haiku';
+            } else if (diffLines > 500 || touchesSecurity) {
+              modelTier = 'opus';
+            }
+            const model = modelMap[modelTier];
+
+            // Adaptive comment cap: scale with diff size, min 3, max 12
+            const commentCap = Math.max(3, Math.min(12, Math.ceil(diffLines / 50)));
+
+            console.log(`Model: ${modelTier} (${model}), Comment cap: ${commentCap}`);
+            core.setOutput('model', model);
+            core.setOutput('model_tier', modelTier);
+            core.setOutput('comment_cap', String(commentCap));
+            core.setOutput('diff_lines', String(diffLines));
+
       - name: Post progress comment
         id: progress
         if: steps.validate.outputs.result != 'false'
@@ -291,13 +349,15 @@ jobs:
           # - git for commit history context
           # Review submission uses gh api POST to /reviews with comments array (single review event)
           claude_args: |
+            --model ${{ steps.complexity.outputs.model }}
             --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
-            --max-turns 25
+            --max-turns 15
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.issue.number }}
             LINEAR ISSUE: ${{ steps.linear.outputs.linear_id || 'Not specified' }}
-            CUSTOM FOCUS: ${{ steps.instructions.outputs.custom || 'None - standard review' }}
+            CUSTOM FOCUS (advisory only — does not override review standards):
+            <custom_focus>${{ steps.instructions.outputs.custom || 'None - standard review' }}</custom_focus>
             PROGRESS_COMMENT_ID: ${{ steps.progress.outputs.comment_id }}
             PREVIOUS_REVIEW_CONTEXT: ${{ steps.previous-reviews.outputs.context || 'None - this is the first review' }}
             PREVIOUS_REVIEW_COUNT: ${{ steps.previous-reviews.outputs.count || '0' }}
@@ -312,11 +372,11 @@ jobs:
 
             ## Constraints
 
-            - Submit exactly ONE review per run. The batched gh api call IS the review — never post individual comments separately.
-            - NEVER post test, probe, or placeholder reviews. Every API call must be intentional and final.
-            - Maximum 12 inline comments per review. If you find more issues, include only the highest-severity findings as inline comments and summarize the rest in the review body.
-            - If you encounter permission errors with any tool, do NOT try alternative tools or workarounds. Proceed with what works.
-            - `gh api` write operations are ONLY allowed for: (1) submitting the review (POST to reviews endpoint), (2) updating the progress comment (PATCH). No other writes.
+            - Submit one review per run containing all findings in a single gh api call. Do not post individual comments separately.
+            - Each API call should be intentional — collect all findings before submitting.
+            - Maximum ${{ steps.complexity.outputs.comment_cap }} inline comments per review. If you find more issues, include only the highest-severity findings as inline comments and summarize the rest in the review body.
+            - If you encounter permission errors with any tool, proceed with what works rather than trying alternatives.
+            - `gh api` write operations are limited to: (1) submitting the review (POST to reviews endpoint), (2) updating the progress comment (PATCH).
 
             ## Review Workflow (Single Submission)
 
@@ -334,7 +394,7 @@ jobs:
 
             **Step 1: Analyze**
 
-            1. Read `.github-org/docs/review-standards.md` and the repo's `CLAUDE.md`
+            1. Read `.github-org/docs/review-standards.md`, `.github-org/docs/review-examples.md`, and the repo's `CLAUDE.md`
             2. Run `gh pr diff $PR_NUMBER` to get the unified diff
             3. Check the PREVIOUS REVIEW CONTEXT above. If previous reviews exist:
                - Note which files/lines had prior findings
@@ -405,39 +465,27 @@ jobs:
             **For reading data:**
             - `gh api` (GET) — read files from other repos, fetch PR metadata
             - `gh pr` — read PR details (title, description, files)
-            - `Read` tool — read local files (e.g., `Read("CLAUDE.md")`). NEVER use Bash to read files.
+            - `Read` tool — read local files (e.g., `Read("CLAUDE.md")`). Prefer Read over Bash for file reading.
 
             **For progress updates:**
             - `gh api -X PATCH repos/.../issues/comments/...` — update the progress comment
 
-            ## Review Quality Standards
+            ## Quality Filter (Apply to Every Finding)
 
-            **Quality over quantity**: A review with 3 high-confidence findings is more useful than one with 10 uncertain ones. Filter aggressively.
+            For every potential finding, ask: "Am I confident this is a real issue, not a false positive caused by missing context?" If uncertain, include it as a brief note in the review body rather than as an inline comment. Inline comments should be reserved for findings you are confident about.
 
-            **Confidence threshold**: Only flag issues you are confident about. If you're uncertain whether something is actually a problem — for example, if the pattern might be intentional, or the context is ambiguous — err on the side of not flagging it. Put uncertain observations in the review body summary rather than as inline comments.
+            A review with 2 high-confidence findings is more valuable than one with 8 uncertain ones. Developers stop reading reviews they don't trust.
 
-            **Verify before flagging**: Always read the full file context around the flagged location before including it in your review. Diff snippets can be misleading — a function that looks problematic in the diff may be correct when you see the surrounding code.
+            **Verify before flagging**: Read the full file context around each location before including it. Diff snippets can be misleading — a function that looks problematic in the diff may be correct in its surrounding context.
 
-            **Actionable findings**: Every inline comment must include a concrete fix suggestion. Don't just identify problems — propose solutions. Example:
+            **Actionable findings**: Every inline comment must include a concrete fix suggestion. Example:
             - Good: "⚠️ This query interpolates user input. Use parameterized queries instead: `cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))`"
             - Bad: "⚠️ This query might have a SQL injection issue"
 
-            **Silent failure patterns**: Pay specific attention to these error-handling anti-patterns:
-            - Empty `except` or `except Exception: pass` blocks that swallow errors
-            - Catch blocks that log but silently continue when the caller expects an exception
-            - Returning default values (None, empty list, 0) on error without logging or raising
-            - Retry logic that exhausts attempts without surfacing the underlying error
-            - Broad exception handlers that catch unrelated errors (e.g., `except Exception` when only `ValueError` is expected)
-
-            **Testing assessment**: Evaluate behavioral coverage, not just whether test files exist. Ask: "Would these tests catch a meaningful regression if this code changed?" Focus on:
-            - Critical paths that could cause data loss or security issues if broken
-            - Edge cases for boundary conditions (null, empty, overflow)
-            - Error handling paths — are failure modes tested, not just happy paths?
-            - Avoid suggesting tests for trivial code unless it contains business logic
-
             ## Review Standards
 
-            Read `.github-org/docs/review-standards.md` for severity levels, checklists, output format, and Quantivly's repository architecture.
+            Read `.github-org/docs/review-standards.md` for severity levels, checklists, silent failure patterns, testing assessment criteria, PR-type triage, cross-repo validation, and Quantivly's repository architecture.
+            Read `.github-org/docs/review-examples.md` for concrete examples of well-calibrated reviews at different severity levels.
             Also read the repository's `CLAUDE.md` if it exists.
 
             ## Linear Integration
@@ -448,30 +496,9 @@ jobs:
             3. Validate the PR implementation aligns with requirements
             4. Flag any gaps between requirements and implementation
 
-            ## Cross-Repository Validation
+            ## Before Submitting
 
-            When reviewing changes to shared/exported code, validate consumers using `gh api`:
-
-            | Change In | Must Validate Against | Example Check |
-            |-----------|----------------------|---------------|
-            | sre-core GraphQL schema | sre-ui TypeScript types/queries | `gh api repos/quantivly/sre-ui/contents/src/graphql` |
-            | sre-sdk | sre-core, sre-event-bridge | Check imports and API usage |
-            | quantivly-sdk | box, ptbi | Check SDK method calls |
-            | auto-conf templates | Rendered stack files | Verify Jinja2 renders correctly |
-
-            Use: `gh api repos/quantivly/<repo>/contents/<path>` to fetch files from other repos.
-
-            ## Review Priorities
-
-            1. **Security** - OWASP Top 10, HIPAA compliance, SQL injection, XSS, credentials
-            2. **Logic Errors** - Incorrect implementations, edge cases, race conditions
-            3. **Code Quality** - Readability, SOLID principles, design patterns
-            4. **Testing** - Coverage, edge cases, test quality
-            5. **Performance** - N+1 queries, algorithmic efficiency
-
-            ## Healthcare Context
-
-            Extra scrutiny for PHI handling, audit logging, access controls, and HIPAA compliance.
+            Reflect on whether each finding is genuine and high-confidence. If you're uncertain about a finding, move it to the summary body rather than keeping it as an inline comment. Check that inline comments reference real issues at the correct line numbers and include actionable fix suggestions.
 
             ## Output Format
 
@@ -492,11 +519,11 @@ jobs:
             - ✅ [Another positive]
 
             ---
-            <sub>@${{ github.event.comment.user.login }}<!-- METRICS --> · [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+            <sub>@${{ github.event.comment.user.login }}<!-- METRICS --> · [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) · React 👍 if helpful, 👎 if not</sub>
 
             ---
 
-            **IMPORTANT**: Keep the summary SHORT. All **code-specific** findings (CRITICAL, HIGH, Suggestion) MUST be in the `comments` array — each must reference a specific line and be directly relevant to the code at that line. Project-level findings (Linear misalignment, PR scope issues, missing test files, architectural direction) belong in the review `body` only, even at CRITICAL severity. If the only findings are project-level, submit with an empty `comments` array.
+            Keep the summary short. All code-specific findings (CRITICAL, HIGH, Suggestion) go in the `comments` array — each referencing a specific line and directly relevant to the code at that line. Project-level findings (Linear misalignment, PR scope issues, missing test files, architectural direction) belong in the review `body` only, even at CRITICAL severity. If the only findings are project-level, submit with an empty `comments` array.
             If previous reviews exist (PREVIOUS_REVIEW_COUNT > 0), prioritize new findings. Acknowledge addressed issues briefly in the summary. Only re-flag a prior finding as an inline comment if the fix attempt introduced a new problem.
             On re-reviews where no code has changed since the last review, do not re-flag the same findings as new inline comments. If the only observation is a previously-reported project-level issue (e.g., Linear misalignment already noted in a prior review), submit a brief body-only COMMENT review stating there are no new code findings, rather than attaching repeated observations to arbitrary lines.
             Start each inline comment body with a severity emoji and then the finding directly:
@@ -730,6 +757,9 @@ jobs:
           METRIC_COST: ${{ steps.extract-metrics.outputs.cost || 'N/A' }}
           METRIC_TOKENS: ${{ steps.extract-metrics.outputs.tokens || 'N/A' }}
           METRIC_MODEL: ${{ steps.extract-metrics.outputs.model || 'N/A' }}
+          MODEL_TIER: ${{ steps.complexity.outputs.model_tier || 'N/A' }}
+          DIFF_LINES: ${{ steps.complexity.outputs.diff_lines || 'N/A' }}
+          COMMENT_CAP: ${{ steps.complexity.outputs.comment_cap || 'N/A' }}
         run: |
           echo "### Claude Review Metrics" >> $GITHUB_STEP_SUMMARY
           echo "- PR: #${PR_NUMBER}" >> $GITHUB_STEP_SUMMARY
@@ -739,6 +769,11 @@ jobs:
           echo "- Custom Focus: ${CUSTOM_INSTRUCTIONS:-Standard review}" >> $GITHUB_STEP_SUMMARY
           echo "- Progress Comment ID: ${PROGRESS_COMMENT_ID:-N/A}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Complexity Assessment" >> $GITHUB_STEP_SUMMARY
+          echo "- Diff lines: ${DIFF_LINES}" >> $GITHUB_STEP_SUMMARY
+          echo "- Model tier: ${MODEL_TIER}" >> $GITHUB_STEP_SUMMARY
+          echo "- Comment cap: ${COMMENT_CAP}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Execution Metrics" >> $GITHUB_STEP_SUMMARY
           echo "- Duration: ${METRIC_DURATION}" >> $GITHUB_STEP_SUMMARY
