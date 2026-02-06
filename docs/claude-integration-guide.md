@@ -68,9 +68,9 @@ Claude posts a **formal GitHub review** (not just a comment), which means:
 **Review Structure**:
 
 1. **Inline Comments** - Attached to specific lines in your code
-   - CRITICAL severity - Security vulnerabilities, data loss risks (red flags)
-   - HIGH severity - Logic errors, broken functionality
-   - SUGGESTION - Nice-to-have improvements
+   - 🚨 Critical - Security vulnerabilities, data loss risks
+   - ⚠️ High - Logic errors, broken functionality
+   - 💡 Suggestion - Nice-to-have improvements
 
 2. **Summary Section** - High-level assessment including:
    - Overview of the PR

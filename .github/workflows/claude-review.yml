@@ -246,7 +246,7 @@ jobs:
                   "path": "src/auth/login.py",
                   "line": 42,
                   "side": "RIGHT",
-                  "body": "⚠️ **[HIGH]** Example: missing input validation"
+                  "body": "⚠️ Example: missing input validation"
                 }
               ]
             }
@@ -384,9 +384,9 @@ jobs:
 
             **IMPORTANT**: Keep the summary SHORT. All code-specific findings (CRITICAL, HIGH, Suggestion) MUST be included in the `comments` array of the review JSON. The review `body` should only contain the template above — never detailed findings.
             Use these severity emojis in inline comments:
-            - 🚨 **[CRITICAL]** - Security, data loss, must fix
-            - ⚠️ **[HIGH]** - Bugs, logic errors, should fix
-            - 💡 **[Suggestion]** - Improvements, nice to have
+            - 🚨 (critical) - Security, data loss, must fix
+            - ⚠️ (high) - Bugs, logic errors, should fix
+            - 💡 (suggestion) - Improvements, nice to have
 
             ## Progress Updates (Optional, Non-Blocking)
 

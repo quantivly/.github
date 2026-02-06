@@ -116,9 +116,9 @@ Reviews now include a progress tracking comment showing:
 ### Inline Comments
 
 Claude posts inline comments directly on specific lines in the diff:
-- Security vulnerabilities marked with `[CRITICAL]`
-- Bug risks marked with `[HIGH]`
-- Suggestions marked with `[Suggestion]`
+- Security vulnerabilities marked with 🚨
+- Bug risks marked with ⚠️
+- Suggestions marked with 💡
 - "Fix this" links for actionable issues
 
 ### Linear Integration
