@@ -149,11 +149,19 @@ jobs:
       - name: Fetch previous review context
         id: previous-reviews
         uses: actions/github-script@v7
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         with:
           github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
             const prNumber = context.issue.number;
             const repo = context.repo;
+
+            // Derive bot login from the GitHub App slug (e.g. "quantivly-reviews" → "quantivly-reviews[bot]")
+            // Falls back to github-actions[bot] when no App token is available
+            const appSlug = process.env.APP_SLUG;
+            const botLogin = appSlug ? `${appSlug}[bot]` : 'github-actions[bot]';
+            console.log(`Looking for reviews by: ${botLogin}`);
 
             // Fetch all reviews on this PR
             const { data: reviews } = await github.rest.pulls.listReviews({
@@ -163,8 +171,8 @@ jobs:
               per_page: 100,
             });
 
-            // Identify Claude reviews by the METRICS marker (same method as update-review-metrics step)
-            const claudeReviews = reviews.filter(r => (r.body || '').includes('<!-- METRICS -->'));
+            // Identify Claude reviews by bot identity
+            const claudeReviews = reviews.filter(r => r.user.login === botLogin);
 
             if (claudeReviews.length === 0) {
               core.setOutput('context', '');
@@ -174,7 +182,10 @@ jobs:
             }
 
             const reviewCount = claudeReviews.length;
-            const latest = claudeReviews[claudeReviews.length - 1];
+            // Find the latest review with a meaningful body for the summary
+            // (some reviews are inline-comment-only with empty bodies)
+            const latest = claudeReviews.filter(r => (r.body || '').length > 0).pop()
+              || claudeReviews[claudeReviews.length - 1];
 
             // Extract body summary: strip the <sub> footer and cap length
             let bodySummary = (latest.body || '').replace(/<sub>[\s\S]*?<\/sub>/g, '').trim();
