@@ -88,20 +88,23 @@ git push origin master
 
 ## Features
 
-### Plugin Capabilities
+### Tool Capabilities
 
-The workflow includes two Claude Code plugins:
+The workflow uses built-in MCP servers and CLI tools:
 
-**pr-review-toolkit** - Specialized review agents:
-- Security vulnerability analysis
-- Silent failure detection
-- Type design analysis
-- Test coverage assessment
+**github_inline_comment** (built-in MCP server):
+- Posts inline comments directly on specific diff lines
+- One independent call per finding (no pending review workflow)
+- Activated automatically when `mcp__github_inline_comment__*` is in `allowedTools`
 
-**superpowers** - Enhanced review workflow:
-- Verification before completion
-- Multi-pass analysis
-- Code quality enforcement
+**Linear MCP** (via `.mcp.json`):
+- Fetches issue description and acceptance criteria
+- Validates PR alignment with requirements
+
+**gh CLI**:
+- Submits formal review events (APPROVE/REQUEST_CHANGES/COMMENT)
+- Reads PR metadata and cross-repo files
+- Updates progress comments
 
 ### Progress Tracking
 
@@ -284,16 +287,14 @@ No changes needed in individual repositories unless:
 - Modifying concurrency settings
 - Adjusting permissions
 
-### Plugin Updates
+### Tool Updates
 
-Plugins update automatically when the action runs. No manual intervention needed.
+Built-in MCP servers update automatically with the `claude-code-action` version. No manual intervention needed.
 
-To pin specific plugin versions, modify the `plugins` parameter in the central workflow:
+To pin a specific action version, update the `uses` line in the central workflow:
 
 ```yaml
-plugins: |
-  pr-review-toolkit@1.2.3
-  superpowers@2.0.0
+uses: anthropics/claude-code-action@v1  # or pin to a specific SHA
 ```
 
 ### Removing Claude Review
@@ -329,7 +330,7 @@ Each Claude review costs approximately **$0.60-$0.90** depending on PR size.
 | Trigger | PR comment | CLI session |
 | Posting | Automatic | User approval required |
 | Cost | Organization-paid | Developer-paid |
-| Plugins | `pr-review-toolkit`, `superpowers` | All installed plugins |
+| MCP Servers | `github_inline_comment` (built-in), Linear | All installed plugins/MCP servers |
 | Flexibility | Standardized | Full customization |
 
 **Use GitHub Actions when**: PR is ready for formal review before requesting human review.

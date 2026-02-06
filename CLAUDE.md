@@ -420,15 +420,15 @@ Run: Automatically on PR push
 - Triggers on `issue_comment` event with `@claude` pattern (direct) or `workflow_call` (reusable)
 - Validates commenter permissions (org member or collaborator)
 - Generates GitHub App token for posting as Claude[bot]
-- Uses `anthropics/claude-code-action@v1` with plugins
+- Uses `anthropics/claude-code-action@v1` with built-in MCP servers
 
-**Plugins**:
-- `linear@claude-plugins-official` - Issue context and requirements validation
-- `github@claude-plugins-official` - Formal review tools (pull_request_review_write, add_comment_to_pending_review)
+**MCP Servers**:
+- `github_inline_comment` (built-in) - Inline PR comment tool (`create_inline_comment`)
+- Linear MCP (via `.mcp.json`) - Issue context and requirements validation
 
 **Features**:
-- **Formal reviews**: Uses `pull_request_review_write` for proper APPROVE/REQUEST_CHANGES/COMMENT events
-- **Inline review comments**: Uses `add_comment_to_pending_review` for line-specific feedback attached to the review
+- **Formal reviews**: Submits review events via `gh api` (APPROVE/REQUEST_CHANGES/COMMENT)
+- **Inline review comments**: Uses built-in `create_inline_comment` for line-specific feedback on the diff
 - **Progress tracking**: Real-time tracking comment during review (auto-deleted after completion)
 - **Linear MCP integration**: Validates PR against issue requirements
 - **Custom reviewer instructions**: Extracted from `@claude` comments
