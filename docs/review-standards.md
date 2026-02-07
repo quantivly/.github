@@ -263,6 +263,15 @@ Each inline comment must include a concrete fix suggestion. Project-level observ
 - **Premature Optimization**: Unless there's a clear performance problem
 - **Bikeshedding**: Focus on substance over style
 
+### Common False Positives to Skip
+- **Django `Meta` classes** don't need docstrings — they are declarative configuration, not logic
+- **`# type: ignore` comments** — verify the suppression context before flagging; these are typically intentional workarounds for mypy limitations
+- **Test fixtures appearing as "unused variables"** — pytest injects them via function parameters
+- **Django settings files with uppercase naming** — these are constants by design (e.g., `DEBUG`, `ALLOWED_HOSTS`)
+- **`noqa` comments** — intentional lint suppressions, not code smells
+
+This list should evolve based on recurring false positives identified in review feedback.
+
 ### Edge Cases & Nuance
 - **False Positives**: If unsure, mark as "Suggestion" not "CRITICAL"
 - **Context Dependent**: Consider repo-specific patterns from CLAUDE.md
@@ -384,7 +393,7 @@ Quantivly builds healthcare analytics software, which means:
 - **Access Controls**: Who can see what data
 - **Audit Logging**: All data access must be logged
 - **Encryption**: Data at rest and in transit
-- **Third-Party**: External service integration requires BAA
+- **Third-Party**: External service integration requires BAA — if a PR introduces a new third-party API integration (new SDK import, HTTP client call to a non-Quantivly domain), flag as HIGH for BAA review
 
 ### Common Patterns
 
@@ -443,7 +452,7 @@ This document should evolve based on:
 
 ## Changelog
 
-- **2026-02-07**: Added framework-specific patterns (Django, Next.js), severity decision heuristic, changelog section
+- **2026-02-07**: Added false-positive exclusion list, BAA guidance for third-party integrations, framework-specific patterns (Django, Next.js), severity decision heuristic, changelog section
 - **2026-02-06**: Added few-shot review examples, adaptive comment caps, silent failure patterns, testing assessment approach
 - **2026-02-05**: Added PR-type triage matrix, cross-repository validation section
 - **2026-02-03**: Separated project-level findings from inline comments, tool allocation table

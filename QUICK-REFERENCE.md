@@ -71,12 +71,13 @@
 ### Files to Know
 
 ```
-.github/workflows/claude-review.yml    # Workflow (triggers on @claude)
-scripts/claude-review.py               # Orchestration (MCP-based)
-CLAUDE.md                              # Repository guidelines (Claude reads this)
+.github/workflows/claude-review.yml    # Central reusable workflow (triggers on @claude)
+docs/review-standards.md               # Review criteria (Claude reads this during review)
+docs/review-examples.md                # Calibration examples (Claude reads this during review)
+CLAUDE.md                              # Repository-specific guidelines (Claude reads this)
 ```
 
-**Note**: Uses **MCP (Model Context Protocol)** for Linear integration. Claude can dynamically explore Linear during review instead of relying on pre-fetched context.
+**Architecture**: Uses [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) (GitHub Action) with **Linear MCP** for dynamic issue context. Claude can explore Linear during review (fetch issues, check comments, explore related tickets) instead of relying on pre-fetched data.
 
 ### Secrets Required
 
@@ -97,9 +98,15 @@ GITHUB_TOKEN         # Auto-provided by GitHub
 
 ### Common Maintenance
 
-**Update prompts** (scripts/claude-review.py):
-- Line ~260: System prompt with review guidelines
+**Update review prompt** (`.github/workflows/claude-review.yml`):
+- The `prompt:` field in the workflow contains review instructions
 - Adjust based on false positives/negatives
+- Test on a real PR after changes (trigger with `@claude`)
+
+**Update review standards** (`docs/review-standards.md`, `docs/review-examples.md`):
+- Add severity calibration examples
+- Update false-positive exclusion list
+- Add framework-specific patterns
 
 **Update guidelines** (CLAUDE.md):
 - Add repository-specific patterns
@@ -124,45 +131,48 @@ git push
 
 ## Cost Tracking
 
-| Reviews/Month | Cost |
-|---------------|------|
-| 10            | ~$7  |
-| 25            | ~$17 |
-| 40            | ~$27 |
-| 100           | ~$68 |
+| Model Tier | Per Review | Use Case |
+|------------|-----------|----------|
+| Haiku 4.5  | ~$0.10    | Docs/config PRs |
+| Sonnet 4.5 | ~$0.50-1.00 | Standard code PRs |
+| Opus 4.6   | ~$2.00-3.00 | Security-sensitive / large PRs |
 
-**Per review**: ~$0.50-$1.00 (varies by PR size)
+**Per review**: ~$0.10-$3.00 (varies by model tier and PR size)
 
 ---
 
-## Architecture (MCP-Based)
+## Architecture
 
 ```
-@claude comment → GitHub Actions → Python Script → Start Linear MCP Server
-                      ↓                   ↓                ↓
-                  Validate          Fetch PR Context   Connect as MCP Client
-                  Permission        Build Prompt       Get Linear Tools
-                                        ↓                ↓
-                                    Claude API with Tools
-                                        ↓
-                                    [Tool Use Loop]
-                                    Claude ↔ MCP Server
-                                        ↓
-                                    Final Review
-                                        ↓
-                                    Post to PR
+@claude comment → GitHub Actions workflow
+                      ↓
+                  Validate permissions
+                      ↓
+                  Assess PR complexity → Select model (Haiku / Sonnet / Opus)
+                      ↓
+                  anthropics/claude-code-action
+                      ↓
+                  Claude reads: review-standards.md, review-examples.md, CLAUDE.md
+                      ↓
+                  Claude analyzes diff, fetches Linear context via MCP
+                      ↓
+                  Single gh api call → PR review with inline comments
+                      ↓
+                  Metrics extraction → Update review footer
 ```
 
-**MCP Advantage**: Claude can dynamically query Linear during review (fetch issues, check comments, explore related tickets) instead of being limited to pre-fetched data.
+**Key features**: Adaptive model selection (Haiku for docs, Sonnet default, Opus for security/large PRs), PHI detection in diffs, staleness guard for re-reviews, single-submission pattern (no comment spam).
 
 ---
 
 ## Key Design Decisions
 
 - **Manual trigger** - Gives control, reduces cost
+- **Adaptive model selection** - Haiku for docs ($0.10), Sonnet for code ($0.50), Opus for security/large PRs ($2-3)
 - **MCP-based Linear** - Dynamic tool access, consistency with local development
 - **Read-only Linear** - GitHub integration handles notifications
-- **Token limits** - Truncate at 2000 lines to control cost
+- **Single submission** - All findings in one API call (no comment spam)
+- **Staleness guard** - Skips review on unchanged commits after 2 prior reviews
 - **Graceful fallback** - Review continues if MCP unavailable
 
 ---
@@ -179,4 +189,4 @@ git push
 
 ---
 
-**Version**: 1.0 | **Last Updated**: 2026-02-04
+**Version**: 2.0 | **Last Updated**: 2026-02-07
