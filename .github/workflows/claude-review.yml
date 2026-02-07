@@ -537,7 +537,21 @@ jobs:
                 "path": "src/auth/login.py",
                 "line": 42,
                 "side": "RIGHT",
-                "body": "⚠️ This endpoint accepts user input without validation, which could allow malformed data into the database"
+                "body": "⚠️ **Missing request timeout**\n\n`requests.get(url)` has no timeout — blocks the thread indefinitely if the server is unreachable.\n\n```suggestion\nresponse = requests.get(url, timeout=10)\n```"
+              },
+              {
+                "path": "apps/dashboard/resolvers.py",
+                "start_line": 45,
+                "line": 48,
+                "start_side": "RIGHT",
+                "side": "RIGHT",
+                "body": "⚠️ **N+1 query in list comprehension**\n\n`facility.equipment_set.all()` inside the loop triggers a separate query per facility.\n\n```suggestion\nfacilities = Facility.objects.filter(\n    organization=org\n).prefetch_related('equipment_set')\n```"
+              },
+              {
+                "path": "apps/export/views.py",
+                "line": 25,
+                "side": "RIGHT",
+                "body": "💡 **Consider streaming for large exports**\n\nThe view loads all rows into memory before writing the CSV response. For datasets exceeding 10k rows, consider using `StreamingHttpResponse` with a generator to keep memory bounded:\n```python\ndef rows():\n    for study in queryset.iterator():\n        yield writer.writerow([study.id, study.name])\n```"
               }
             ]
           }
@@ -551,6 +565,12 @@ jobs:
           - `side` is always `"RIGHT"` for commenting on added/modified code
           - General observations that don't apply to a specific line go in the review `body`, not in `comments`
           - Inline comments must be about specific code at the referenced line (logic flaws, security vulnerabilities, bugs, improvements). Project-level observations — Linear issue status, PR scope/direction, overall test coverage gaps, architectural concerns — belong in the review `body` regardless of severity. If no code-specific findings exist, the `comments` array should be empty.
+          - When the fix is a direct replacement of the commented line(s), use a suggestion block: ```suggestion\n<replacement code>\n``` — the developer can one-click apply or batch commit multiple suggestions
+          - When the fix involves changes elsewhere or structural changes, use a regular code block (```python) instead of a suggestion block
+          - For multi-line suggestions: use `start_line`, `start_side`: `RIGHT`, `line`, `side`: `RIGHT` — the suggestion replaces lines from `start_line` through `line`
+          - A suggestion block replaces the targeted line(s) exactly — the code inside must be complete and correct for those specific lines (no `...` elision, no imports that would replace business logic)
+          - Suggestion blocks only work on lines that are part of the PR diff
+          - Each comment body may contain at most one suggestion block
 
           Choose event based on findings:
           - `REQUEST_CHANGES`: Has CRITICAL issues
@@ -590,9 +610,10 @@ jobs:
 
           **Verify before flagging**: Read the full file context around each location before including it. Diff snippets can be misleading — a function that looks problematic in the diff may be correct in its surrounding context.
 
-          **Actionable findings**: Every inline comment must include a concrete fix suggestion. Example:
-          - Good: "⚠️ This query interpolates user input. Use parameterized queries instead: `cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))`"
-          - Bad: "⚠️ This query might have a SQL injection issue"
+          **Actionable findings**: Every inline comment must include a concrete fix. Prefer suggestion blocks for one-click apply:
+          - Best: suggestion block — "⚠️ **SQL injection** ... ```suggestion\ncursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))\n```" (one-click apply)
+          - Good: regular code block — when the fix doesn't directly replace the commented line(s)
+          - Bad: "⚠️ This query might have a SQL injection issue" (vague, no fix)
 
           **Common false positives to skip**:
           - Django `Meta` classes don't need docstrings
@@ -624,6 +645,8 @@ jobs:
           2. I can explain what specific bug, vulnerability, or issue exists
           3. My fix suggestion compiles/runs correctly in this codebase's context
           4. This is NOT something pre-commit hooks (ruff, black, mypy) would catch
+          5. For each suggestion block: the replacement code exactly replaces the targeted line(s) and would be valid code if applied
+          6. Multi-line suggestions use both `start_line`/`start_side` and `line`/`side`
 
           If uncertain about a finding, move it to the summary body rather than keeping it as an inline comment. Check that inline comments reference correct line numbers and include actionable fix suggestions.
 
@@ -653,11 +676,16 @@ jobs:
           Keep the summary short. All code-specific findings (CRITICAL, HIGH, Suggestion) go in the `comments` array — each referencing a specific line and directly relevant to the code at that line. Project-level findings (Linear misalignment, PR scope issues, missing test files, architectural direction) belong in the review `body` only, even at CRITICAL severity. If the only findings are project-level, submit with an empty `comments` array.
           If previous reviews exist (PREVIOUS_REVIEW_COUNT > 0), prioritize new findings. Acknowledge addressed issues briefly in the summary. Only re-flag a prior finding as an inline comment if the fix attempt introduced a new problem.
           On re-reviews where no code has changed since the last review, do not re-flag the same findings as new inline comments. If the only observation is a previously-reported project-level issue (e.g., Linear misalignment already noted in a prior review), submit a brief body-only COMMENT review stating there are no new code findings, rather than attaching repeated observations to arbitrary lines.
-          Start each inline comment body with a severity emoji and then the finding directly:
+          Format each inline comment as: `<emoji> **<Short Title>**` followed by explanation and fix.
           - 🚨 for security and data loss issues (must fix)
           - ⚠️ for bugs and logic errors (should fix)
           - 💡 for improvements (nice to have)
-          Example: "🚨 User input is interpolated into the SQL query without parameterization"
+
+          With suggestion block (direct line replacement):
+          "⚠️ **Missing request timeout**\n\n`requests.get(url)` has no timeout.\n\n```suggestion\nresponse = requests.get(url, timeout=10)\n```"
+
+          With regular code block (fix is elsewhere or structural):
+          "💡 **Consider streaming for large exports**\n\nLoads all rows into memory. Use a generator:\n```python\ndef rows():\n    for study in queryset.iterator():\n        yield writer.writerow([study.id, study.name])\n```"
 
           ## Progress Updates (Optional, Non-Blocking)
 

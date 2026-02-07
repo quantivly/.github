@@ -428,7 +428,7 @@ Run: Automatically on PR push
 
 **Features**:
 - **Formal reviews**: Submits review events via `gh api` (APPROVE/REQUEST_CHANGES/COMMENT)
-- **Inline review comments**: Submitted as part of the review via GitHub Reviews API `comments` array
+- **Inline review comments**: Submitted as part of the review via GitHub Reviews API `comments` array. Uses GitHub suggestion blocks (`` ```suggestion ``) for direct line replacements, enabling one-click "Apply suggestion" or batch-commit of multiple suggestions. Falls back to regular code blocks when the fix involves changes elsewhere or structural modifications.
 - **Adaptive model selection**: Haiku for docs/config, Sonnet for standard code, Opus for large/security-sensitive PRs
 - **Adaptive comment caps**: Inline comment limit scales with diff size (min 3, max 12)
 - **Progress tracking**: Real-time tracking comment showing model tier and expected duration (auto-deleted after completion)
