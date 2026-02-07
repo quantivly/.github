@@ -240,12 +240,23 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 - `COMMENT`: Has HIGH issues or needs clarification
 - `APPROVE`: Only suggestions, no blockers
 
-**Inline comments** use severity emoji prefixes:
+**Inline comments** use severity emoji prefixes and bolded short titles:
 - 🚨 for security and data loss issues (must fix)
 - ⚠️ for bugs and logic errors (should fix)
 - 💡 for improvements (nice to have)
 
-Each inline comment must include a concrete fix suggestion. Project-level observations (Linear misalignment, PR scope, architectural direction) belong in the review body, not as inline comments.
+Format: `<emoji> **<Short Title>** → explanation → suggestion/code block`
+
+Each inline comment must include a concrete fix suggestion. When the fix directly replaces the commented line(s), use a GitHub suggestion block (`` ```suggestion ``) so the developer can one-click apply or batch suggestions into a commit. When the fix involves changes elsewhere or structural modifications, use a regular code block with language annotation (e.g., `` ```python ``).
+
+**Suggestion block rules**:
+- Use `suggestion` when the fix is a direct replacement of the targeted line(s) and the replacement is complete (no `...` elision)
+- Use a regular code block when the fix involves adding code elsewhere, structural changes, or the comment is about the absence of something
+- For multi-line suggestions, use `start_line`/`start_side` and `line`/`side` in the review API call
+- Each comment body may contain at most one suggestion block
+- Suggestion blocks only work on lines that are part of the PR diff
+
+Project-level observations (Linear misalignment, PR scope, architectural direction) belong in the review body, not as inline comments.
 
 ## Review Guidelines
 
@@ -452,6 +463,7 @@ This document should evolve based on:
 
 ## Changelog
 
+- **2026-02-07**: Added GitHub suggestion block guidance for inline comments, bolded short titles format, suggestion vs regular code block rules
 - **2026-02-07**: Added false-positive exclusion list, BAA guidance for third-party integrations, framework-specific patterns (Django, Next.js), severity decision heuristic, changelog section
 - **2026-02-06**: Added few-shot review examples, adaptive comment caps, silent failure patterns, testing assessment approach
 - **2026-02-05**: Added PR-type triage matrix, cross-repository validation section
