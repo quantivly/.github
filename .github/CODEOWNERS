@@ -1,0 +1,4 @@
+# Review prompt and standards — changes affect all PR reviews org-wide
+.github/workflows/claude-review.yml @quantivly/engineering-leads
+docs/review-standards.md @quantivly/engineering-leads
+docs/review-examples.md @quantivly/engineering-leads

@@ -273,7 +273,7 @@ Quantivly has two complementary Claude review systems that use the same [review 
    ```
    Custom instructions are included in Claude's prompt and prioritized during review.
 
-4. **Wait 2-5 minutes** for review to complete
+4. **Wait for review to complete** (Haiku: ~1-2 min, Sonnet: ~2-4 min, Opus: ~3-7 min)
 
 5. **Address feedback**:
    - Fix **CRITICAL** issues (security, data loss)
@@ -407,7 +407,7 @@ Run: Automatically on PR push
 - **Central workflow**: `quantivly/.github/.github/workflows/claude-review.yml`
 - **Caller workflows**: Minimal files in each repository's `.github/workflows/` directory
 - **Secrets**: Automatically inherited from organization secrets using `secrets: inherit`
-- **Action**: [`anthropics/claude-code-action@v1`](https://github.com/anthropics/claude-code-action)
+- **Action**: [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) (pinned to specific commit SHA for supply chain security)
 - **Deployment**: See [Deploying Claude Review](docs/deploying-claude-review.md)
 
 **GitHub App "Claude"**: Custom identity for reviews
@@ -421,7 +421,7 @@ Run: Automatically on PR push
 - Triggers on `issue_comment` event with `@claude` pattern (direct) or `workflow_call` (reusable)
 - Validates commenter permissions (org member or collaborator)
 - Generates GitHub App token for posting as Claude[bot]
-- Uses `anthropics/claude-code-action@v1` with built-in MCP servers
+- Uses `anthropics/claude-code-action` (SHA-pinned) with built-in MCP servers
 
 **MCP Servers**:
 - Linear MCP (via `.mcp.json`) - Issue context and requirements validation
@@ -431,7 +431,9 @@ Run: Automatically on PR push
 - **Inline review comments**: Submitted as part of the review via GitHub Reviews API `comments` array
 - **Adaptive model selection**: Haiku for docs/config, Sonnet for standard code, Opus for large/security-sensitive PRs
 - **Adaptive comment caps**: Inline comment limit scales with diff size (min 3, max 12)
-- **Progress tracking**: Real-time tracking comment during review (auto-deleted after completion)
+- **Progress tracking**: Real-time tracking comment showing model tier and expected duration (auto-deleted after completion)
+- **Cost alerting**: Reviews exceeding $5 trigger a comment suggesting PR size reduction
+- **Cache metrics**: Token cache read/creation rates tracked in step summary for cost optimization
 - **Linear MCP integration**: Validates PR against issue requirements
 - **Custom reviewer instructions**: Extracted from `@claude` comments (wrapped in XML delimiters for safety)
 - **Few-shot review examples**: Concrete examples guide review calibration and output format

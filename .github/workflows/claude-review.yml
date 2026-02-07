@@ -126,7 +126,7 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
-            const match = pr.title.match(/^([A-Z]+-\d+)/);
+            const match = pr.title.match(/^([A-Z]{2,6}-\d{1,6})/);
             core.setOutput('linear_id', match ? match[1] : '');
             console.log(match ? `Linear issue: ${match[1]}` : 'No Linear issue ID in PR title');
 
@@ -136,6 +136,11 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // workflow_call events have no comment payload
+            if (context.eventName === 'workflow_call') {
+              core.setOutput('custom', '');
+              return;
+            }
             const body = context.payload.comment.body;
             const match = body.match(/@claude\b[,:]?\s*(.*)/is);
             if (!match) {
@@ -163,6 +168,13 @@ jobs:
         with:
           github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
+            // workflow_call events may not have context.issue.number
+            if (context.eventName === 'workflow_call') {
+              core.setOutput('context', '');
+              core.setOutput('count', '0');
+              console.log('Triggered via workflow_call — skipping previous review fetch');
+              return;
+            }
             const prNumber = context.issue.number;
             const repo = context.repo;
 
@@ -262,8 +274,8 @@ jobs:
             const prNumber = context.issue.number;
             const repo = context.repo;
 
-            // Get diff stats for the PR
-            const { data: files } = await github.rest.pulls.listFiles({
+            // Paginate to handle PRs with 100+ files (GitHub returns max 100 per page)
+            const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: repo.owner,
               repo: repo.repo,
               pull_number: prNumber,
@@ -314,14 +326,24 @@ jobs:
         id: progress
         if: steps.validate.outputs.result != 'false'
         uses: actions/github-script@v7
+        env:
+          MODEL_TIER: ${{ steps.complexity.outputs.model_tier }}
         with:
           github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
+            const tier = process.env.MODEL_TIER || 'sonnet';
+            const tierInfo = {
+              haiku: { name: 'Haiku 4.5', time: '~1-2 minutes', desc: 'docs/config review' },
+              sonnet: { name: 'Sonnet 4.5', time: '~2-4 minutes', desc: 'standard code review' },
+              opus: { name: 'Opus 4.6', time: '~3-7 minutes', desc: 'large/security-sensitive review' },
+            };
+            const info = tierInfo[tier] || tierInfo.sonnet;
+            const body = `🤖 **Claude review started...** Using ${info.name} (${info.desc}). Expected: ${info.time}.\n\n_Analyzing code for security, logic errors, code quality, testing, and performance._`;
             const { data: comment } = await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: '🤖 **Claude review started...** This typically takes 2-5 minutes.\n\n_Analyzing code for security, logic errors, code quality, testing, and performance._'
+              body,
             });
             core.setOutput('comment_id', comment.id);
             console.log(`Posted progress comment ${comment.id}`);
@@ -329,7 +351,8 @@ jobs:
       - name: Run Claude PR Review
         id: claude-review
         if: steps.validate.outputs.result != 'false'
-        uses: anthropics/claude-code-action@v1
+        timeout-minutes: 12
+        uses: anthropics/claude-code-action@b113f49a56229d8276e2bf05743ad6900121239c # v1
         env:
           # Linear MCP server (via .mcp.json) uses env var for API authentication
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
@@ -348,9 +371,10 @@ jobs:
           # - File tools for reading codebase
           # - git for commit history context
           # Review submission uses gh api POST to /reviews with comments array (single review event)
+          # gh api scoped to: POST reviews, PATCH progress comments, GET cross-repo files
           claude_args: |
             --model ${{ steps.complexity.outputs.model }}
-            --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh api:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+            --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh api -X POST:*),Bash(gh api -X PATCH:*),Bash(gh api repos/:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
             --max-turns 15
           prompt: |
             REPO: ${{ github.repository }}
@@ -498,7 +522,13 @@ jobs:
 
             ## Before Submitting
 
-            Reflect on whether each finding is genuine and high-confidence. If you're uncertain about a finding, move it to the summary body rather than keeping it as an inline comment. Check that inline comments reference real issues at the correct line numbers and include actionable fix suggestions.
+            Before submitting, verify each inline comment passes ALL of these:
+            1. I read the full file (not just the diff) around this location
+            2. I can explain what specific bug, vulnerability, or issue exists
+            3. My fix suggestion compiles/runs correctly in this codebase's context
+            4. This is NOT something pre-commit hooks (ruff, black, mypy) would catch
+
+            If uncertain about a finding, move it to the summary body rather than keeping it as an inline comment. Check that inline comments reference correct line numbers and include actionable fix suggestions.
 
             ## Output Format
 
@@ -626,6 +656,36 @@ jobs:
             echo "Tokens: $TOKENS_FMT"
           fi
 
+          # Cache: separate cache read vs creation tokens
+          CACHE_READ=$(jq '
+            [.[] | select(.type == "assistant") | .message.usage // empty |
+              (.cache_read_input_tokens // 0)
+            ] | add // 0
+          ' "$EXECUTION_FILE" 2>/dev/null)
+          CACHE_CREATION=$(jq '
+            [.[] | select(.type == "assistant") | .message.usage // empty |
+              (.cache_creation_input_tokens // 0)
+            ] | add // 0
+          ' "$EXECUTION_FILE" 2>/dev/null)
+          if [ -n "$CACHE_READ" ] && [ "$CACHE_READ" != "null" ] && [ "$CACHE_READ" -gt 0 ] 2>/dev/null; then
+            if [ "$CACHE_READ" -ge 1000 ]; then
+              CACHE_READ_FMT="$(echo "$CACHE_READ" | awk '{printf "%.0fk", $1/1000}')"
+            else
+              CACHE_READ_FMT="$CACHE_READ"
+            fi
+            echo "cache_read=${CACHE_READ_FMT} cached" >> "$GITHUB_OUTPUT"
+            echo "Cache read: ${CACHE_READ_FMT}"
+          fi
+          if [ -n "$CACHE_CREATION" ] && [ "$CACHE_CREATION" != "null" ] && [ "$CACHE_CREATION" -gt 0 ] 2>/dev/null; then
+            if [ "$CACHE_CREATION" -ge 1000 ]; then
+              CACHE_CREATION_FMT="$(echo "$CACHE_CREATION" | awk '{printf "%.0fk", $1/1000}')"
+            else
+              CACHE_CREATION_FMT="$CACHE_CREATION"
+            fi
+            echo "cache_creation=${CACHE_CREATION_FMT} new cache" >> "$GITHUB_OUTPUT"
+            echo "Cache creation: ${CACHE_CREATION_FMT}"
+          fi
+
           # Model: from the system init message
           MODEL_ID=$(jq -r '
             [.[] | select(.type == "system" and .subtype == "init")] | first //empty |
@@ -744,6 +804,26 @@ jobs:
               body: `❌ Claude review failed. Check [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nTo retry, post a new comment mentioning Claude.`
             });
 
+      - name: Post cost warning for expensive reviews
+        if: always() && steps.extract-metrics.outputs.cost
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          METRIC_COST: ${{ steps.extract-metrics.outputs.cost }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            const costStr = (process.env.METRIC_COST || '').replace('$', '');
+            const cost = parseFloat(costStr);
+            if (isNaN(cost) || cost <= 5.0) return;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `💰 **Review cost alert**: This review cost ${process.env.METRIC_COST}, which is unusually high. Very large PRs tend to produce lower-quality reviews due to diluted focus. Consider breaking this PR into smaller, focused PRs for more effective reviews.`,
+            });
+            console.log(`Posted cost warning: ${process.env.METRIC_COST}`);
+
       - name: Report usage metrics
         if: always()
         env:
@@ -757,6 +837,8 @@ jobs:
           METRIC_COST: ${{ steps.extract-metrics.outputs.cost || 'N/A' }}
           METRIC_TOKENS: ${{ steps.extract-metrics.outputs.tokens || 'N/A' }}
           METRIC_MODEL: ${{ steps.extract-metrics.outputs.model || 'N/A' }}
+          METRIC_CACHE_READ: ${{ steps.extract-metrics.outputs.cache_read || 'N/A' }}
+          METRIC_CACHE_CREATION: ${{ steps.extract-metrics.outputs.cache_creation || 'N/A' }}
           MODEL_TIER: ${{ steps.complexity.outputs.model_tier || 'N/A' }}
           DIFF_LINES: ${{ steps.complexity.outputs.diff_lines || 'N/A' }}
           COMMENT_CAP: ${{ steps.complexity.outputs.comment_cap || 'N/A' }}
@@ -779,4 +861,6 @@ jobs:
           echo "- Duration: ${METRIC_DURATION}" >> $GITHUB_STEP_SUMMARY
           echo "- Cost: ${METRIC_COST}" >> $GITHUB_STEP_SUMMARY
           echo "- Tokens: ${METRIC_TOKENS}" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache read: ${METRIC_CACHE_READ}" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache creation: ${METRIC_CACHE_CREATION}" >> $GITHUB_STEP_SUMMARY
           echo "- Model: ${METRIC_MODEL}" >> $GITHUB_STEP_SUMMARY
