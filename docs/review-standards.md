@@ -222,13 +222,15 @@ Evaluate behavioral coverage, not just whether test files exist. Ask: "Would the
 The review body should be a concise summary. Code-specific findings (CRITICAL, HIGH, Suggestion) are posted as inline comments on the PR diff — not in the review body.
 
 ```markdown
-**Summary**: [1-2 sentences: what the PR does]
+> [1-2 sentences: what the PR does]
 
-**Linear**: [Issue ID] - [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
+**Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
 
-**Prior reviews**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
+**Re-review**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
-**Issues**: [X critical, Y high, Z suggestions] — see inline comments
+**Issues**: 🚨 X · ⚠️ Y · 💡 Z — see inline comments
+
+[If findings were omitted due to comment cap, add a collapsible <details> block listing them with file:line references.]
 
 **Highlights**:
 - ✅ [Notable good practice]

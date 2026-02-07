@@ -11,7 +11,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "**Summary**: Adds CSV export endpoint for study utilization data with date range filtering.\n\n**Linear**: HUB-1234 - ✅ Aligned (implements export with date filtering as specified)\n\n**Issues**: 0 critical, 1 high, 1 suggestion — see inline comments\n\n**Highlights**:\n- ✅ Good use of streaming response for large datasets\n- ✅ Proper Celery task for async generation\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345)</sub>",
+  "body": "> Adds CSV export endpoint for study utilization data with date range filtering.\n\n**Linear**: [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned (implements export with date filtering as specified)\n\n**Issues**: 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Good use of streaming response for large datasets\n- ✅ Proper Celery task for async generation\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/export/views.py",
@@ -51,7 +51,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "APPROVE",
-  "body": "**Summary**: Adds role-based dashboard filtering so facility managers only see their assigned facilities.\n\n**Linear**: HUB-5678 - ✅ Aligned (implements all 3 acceptance criteria)\n\n**Issues**: 0 critical, 0 high, 0 suggestions\n\n**Highlights**:\n- ✅ Access control check at both GraphQL resolver and queryset level (defense in depth)\n- ✅ Comprehensive test coverage including cross-facility access denial\n- ✅ Audit logging for filtered access attempts\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12346)</sub>",
+  "body": "> Adds role-based dashboard filtering so facility managers only see their assigned facilities.\n\n**Linear**: [HUB-5678](https://linear.app/quantivly/issue/HUB-5678/) — ✅ Aligned (implements all 3 acceptance criteria)\n\n**Issues**: 🚨 0 · ⚠️ 0 · 💡 0\n\n**Highlights**:\n- ✅ Access control check at both GraphQL resolver and queryset level (defense in depth)\n- ✅ Comprehensive test coverage including cross-facility access denial\n- ✅ Audit logging for filtered access attempts\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12346) · 👍 👎</sub>",
   "comments": []
 }
 ```
@@ -74,7 +74,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "APPROVE",
-  "body": "**Summary**: Adds CSV export endpoint for study utilization data with date range filtering.\n\n**Linear**: HUB-1234 - ✅ Aligned\n\n**Prior reviews**: Re-review #2. 2 of 2 prior findings addressed. Focusing on new/changed code.\n\n**Issues**: 0 critical, 0 high, 0 suggestions\n\n**Highlights**:\n- ✅ SQL parameterization fixed — dates now passed directly to ORM filter\n- ✅ Empty dataset now returns 204 with descriptive message header\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12347)</sub>",
+  "body": "> Adds CSV export endpoint for study utilization data with date range filtering.\n\n**Linear**: [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned\n\n**Re-review**: Re-review #2. 2 of 2 prior findings addressed. Focusing on new/changed code.\n\n**Issues**: 🚨 0 · ⚠️ 0 · 💡 0\n\n**Highlights**:\n- ✅ SQL parameterization fixed — dates now passed directly to ORM filter\n- ✅ Empty dataset now returns 204 with descriptive message header\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12347) · 👍 👎</sub>",
   "comments": []
 }
 ```
@@ -97,7 +97,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "**Summary**: Adds management command to bulk-update patient study assignments.\n\n**Linear**: HUB-9012 - ⚠️ Gaps (issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure)\n\n**Issues**: 1 critical, 0 high, 1 suggestion — see inline comments\n\n**Highlights**:\n- ✅ Proper use of database transaction for atomic bulk update\n- ✅ Dry-run mode for safe testing\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348)</sub>",
+  "body": "> Adds management command to bulk-update patient study assignments.\n\n**Linear**: [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — ⚠️ Gaps (issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure)\n\n**Issues**: 🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Proper use of database transaction for atomic bulk update\n- ✅ Dry-run mode for safe testing\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
@@ -137,7 +137,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "APPROVE",
-  "body": "**Summary**: Updates project README with new deployment instructions and adds Helm chart values template.\n\n**Linear**: OPS-456 - ✅ Aligned (adds deployment docs as requested)\n\n**Issues**: 0 critical, 0 high, 1 suggestion — see inline comments\n\n**Highlights**:\n- ✅ Clear step-by-step deployment instructions with prerequisites\n- ✅ Helm values template includes sensible defaults with comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12349)</sub>",
+  "body": "> Updates project README with new deployment instructions and adds Helm chart values template.\n\n**Linear**: [OPS-456](https://linear.app/quantivly/issue/OPS-456/) — ✅ Aligned (adds deployment docs as requested)\n\n**Issues**: 🚨 0 · ⚠️ 0 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Clear step-by-step deployment instructions with prerequisites\n- ✅ Helm values template includes sensible defaults with comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12349) · 👍 👎</sub>",
   "comments": [
     {
       "path": "docs/deployment.md",
@@ -167,7 +167,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "**Summary**: Refactors authentication middleware to support multi-tenant Keycloak realms with per-facility token validation.\n\n**Linear**: HUB-2345 - ✅ Aligned (implements all 4 acceptance criteria for multi-tenant auth)\n\n**Issues**: 0 critical, 3 high, 2 suggestions — see inline comments. 3 additional suggestions omitted from inline comments due to comment cap:\n- `middleware/keycloak.py:142` — Consider caching realm discovery documents to reduce auth latency\n- `middleware/keycloak.py:198` — The `max_retries=5` constant could be extracted to settings for configurability\n- `tests/test_auth.py:67` — Missing test for expired token with valid realm but revoked permissions\n\n**Highlights**:\n- ✅ Token validation uses RS256 with JWKS endpoint (not shared secrets)\n- ✅ Per-facility realm isolation prevents cross-tenant data access\n- ✅ Comprehensive test suite with 12 test cases covering happy path and error scenarios\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12350)</sub>",
+  "body": "> Refactors authentication middleware to support multi-tenant Keycloak realms with per-facility token validation.\n\n**Linear**: [HUB-2345](https://linear.app/quantivly/issue/HUB-2345/) — ✅ Aligned (implements all 4 acceptance criteria for multi-tenant auth)\n\n**Issues**: 🚨 0 · ⚠️ 3 · 💡 2 — see inline comments\n\n<details>\n<summary>📋 3 additional findings omitted (comment cap)</summary>\n\n- `middleware/keycloak.py:142` — Consider caching realm discovery documents to reduce auth latency\n- `middleware/keycloak.py:198` — The `max_retries=5` constant could be extracted to settings for configurability\n- `tests/test_auth.py:67` — Missing test for expired token with valid realm but revoked permissions\n\n</details>\n\n**Highlights**:\n- ✅ Token validation uses RS256 with JWKS endpoint (not shared secrets)\n- ✅ Per-facility realm isolation prevents cross-tenant data access\n- ✅ Comprehensive test suite with 12 test cases covering happy path and error scenarios\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12350) · 👍 👎</sub>",
   "comments": [
     {
       "path": "middleware/keycloak.py",
@@ -210,7 +210,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 - **Suggestion blocks for direct replacements** — all 3 ⚠️ findings use `` ```suggestion `` because each fix directly replaces the commented line(s); the multi-line exception handler uses `start_line`/`line` to span 3 lines
 - **Regular text for behavioral advice** — 💡 findings have no code block because they suggest architectural changes, not line replacements
 - **Prioritized findings** — the 3 inline ⚠️ findings are highest impact (security, reliability, error masking); lower-priority items are in the body
-- **Comment cap explained** — body clearly lists 3 additional suggestions that didn't fit, with file:line references
+- **Comment cap explained** — collapsible `<details>` block lists 3 additional suggestions that didn't fit, with file:line references
 - **Linear validation is thorough** — references 4 acceptance criteria
 - **Highlights are specific** — RS256, per-facility isolation, test count — not generic praise
 
@@ -225,7 +225,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "**Summary**: Adds facility dashboard endpoint aggregating study counts, equipment utilization, and alert summaries.\n\n**Linear**: HUB-3456 - ✅ Aligned\n\n**Custom focus**: N+1 queries and database performance (as requested)\n\n**Issues**: 0 critical, 2 high, 1 suggestion — see inline comments\n\n**Highlights**:\n- ✅ Good use of `annotate()` for study count aggregation (avoids per-facility query)\n- ✅ Dashboard response is paginated (won't unboundedly grow)\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12351)</sub>",
+  "body": "> Adds facility dashboard endpoint aggregating study counts, equipment utilization, and alert summaries.\n\n**Linear**: [HUB-3456](https://linear.app/quantivly/issue/HUB-3456/) — ✅ Aligned\n\n**Custom focus**: N+1 queries and database performance (as requested)\n\n**Issues**: 🚨 0 · ⚠️ 2 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Good use of `annotate()` for study count aggregation (avoids per-facility query)\n- ✅ Dashboard response is paginated (won't unboundedly grow)\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12351) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/dashboard/resolvers.py",
@@ -267,7 +267,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "**Summary**: Adds paginated list endpoint for facility equipment inventory.\n\n**Linear**: HUB-4567 - ✅ Aligned\n\n**Issues**: 0 critical, 1 high, 1 suggestion — see inline comments\n\n**Highlights**:\n- ✅ Proper use of DjangoFilterBackend for query parameters\n- ✅ Serializer validates equipment status transitions\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352)</sub>",
+  "body": "> Adds paginated list endpoint for facility equipment inventory.\n\n**Linear**: [HUB-4567](https://linear.app/quantivly/issue/HUB-4567/) — ✅ Aligned\n\n**Issues**: 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Proper use of DjangoFilterBackend for query parameters\n- ✅ Serializer validates equipment status transitions\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/equipment/views.py",

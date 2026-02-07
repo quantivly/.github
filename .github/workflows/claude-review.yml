@@ -656,20 +656,29 @@ jobs:
 
           ---
 
-          **Summary**: [1-2 sentences: what the PR does]
+          > [1-2 sentences: what the PR does]
 
-          **Linear**: [Issue ID] - [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
+          **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]. If no Linear issue is found, use "Not specified" instead of the link.
 
-          **Prior reviews**: [If PREVIOUS_REVIEW_COUNT > 0: "Re-review #(PREVIOUS_REVIEW_COUNT + 1). X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line.]
+          **Re-review**: [If PREVIOUS_REVIEW_COUNT > 0: "Re-review #(PREVIOUS_REVIEW_COUNT + 1). X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
 
-          **Issues**: [X critical, Y high, Z suggestions] — see inline comments
+          **Issues**: 🚨 X · ⚠️ Y · 💡 Z — see inline comments
+
+          [If any findings were omitted because they exceeded the inline comment cap, add a collapsible block:]
+          <details>
+          <summary>📋 N additional findings omitted (comment cap)</summary>
+
+          - `file.py:42` — Description of omitted finding
+          - ...
+
+          </details>
 
           **Highlights**:
           - ✅ [Notable good practice]
           - ✅ [Another positive]
 
           ---
-          <sub>@${{ github.event.comment.user.login }}<!-- METRICS --> · [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) · React 👍 if helpful, 👎 if not</sub>
+          <sub>@${{ github.event.comment.user.login }}<!-- METRICS --> · [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) · 👍 👎</sub>
 
           ---
 
