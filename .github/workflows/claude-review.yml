@@ -18,7 +18,11 @@ on:
         required: false
         description: GitHub App private key for posting reviews as Claude[bot]
 
-# Note: Concurrency control is handled by the caller workflow
+# Defensive concurrency: prevents parallel reviews on the same PR.
+# Callers should also have their own concurrency block, but this is a safety net.
+concurrency:
+  group: claude-review-${{ github.repository }}-${{ github.event.issue.number || github.event.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -250,18 +254,21 @@ jobs:
             core.setOutput('count', String(reviewCount));
             // Output the commit SHA the latest review was submitted on (for staleness detection)
             core.setOutput('last_review_commit', latest.commit_id || '');
+            // Output the latest review state (APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED)
+            core.setOutput('last_review_state', latest.state || '');
             console.log(`Found ${reviewCount} previous Claude review(s). Context: ${contextStr.length} chars`);
-            console.log(`Latest review commit: ${latest.commit_id || 'unknown'}`);
+            console.log(`Latest review commit: ${latest.commit_id || 'unknown'}, state: ${latest.state || 'unknown'}`);
 
       - name: Check for stale re-reviews
         id: staleness
-        if: steps.validate.outputs.result != 'false' && steps.previous-reviews.outputs.count >= 3
+        if: steps.validate.outputs.result != 'false' && steps.previous-reviews.outputs.count >= 2
         uses: actions/github-script@v7
         with:
           script: |
             const prNumber = context.issue.number;
             const repo = context.repo;
             const lastReviewCommit = '${{ steps.previous-reviews.outputs.last_review_commit }}';
+            const lastReviewState = '${{ steps.previous-reviews.outputs.last_review_state }}';
             const reviewCount = parseInt('${{ steps.previous-reviews.outputs.count }}', 10);
 
             if (!lastReviewCommit) {
@@ -277,10 +284,15 @@ jobs:
               pull_number: prNumber,
             });
             const currentHead = pr.head.sha;
-            console.log(`Current HEAD: ${currentHead}, Last review commit: ${lastReviewCommit}`);
+            console.log(`Current HEAD: ${currentHead}, Last review commit: ${lastReviewCommit}, State: ${lastReviewState}`);
 
             if (currentHead === lastReviewCommit) {
-              console.log(`Stale: ${reviewCount} prior reviews and no code changes since last review`);
+              // Skip if already approved on this commit (no point re-reviewing)
+              if (lastReviewState === 'APPROVED') {
+                console.log('Stale: last review was APPROVE on this commit — no re-review needed');
+              } else {
+                console.log(`Stale: ${reviewCount} prior reviews and no code changes since last review`);
+              }
               core.setOutput('skip', 'true');
             } else {
               console.log('Code has changed since last review — proceeding');
@@ -300,6 +312,21 @@ jobs:
               issue_number: context.issue.number,
               body: `🔄 **Skipping review** — no code changes since the last review (${count} prior reviews on the same commit). Previous review findings still apply.\n\nPush new commits and then trigger \`@claude\` again for a fresh review.`,
             });
+
+      - name: Compute diff since last review
+        id: delta
+        if: steps.validate.outputs.result != 'false' && steps.staleness.outputs.skip != 'true' && steps.previous-reviews.outputs.last_review_commit != ''
+        continue-on-error: true
+        env:
+          LAST_REVIEW_COMMIT: ${{ steps.previous-reviews.outputs.last_review_commit }}
+        run: |
+          # Compute what changed since the last review for focused re-review
+          DELTA=$(git diff "$LAST_REVIEW_COMMIT"..HEAD --stat 2>/dev/null || echo "Unable to compute delta — commit may have been force-pushed")
+          {
+            echo "delta<<DELTA_EOF"
+            echo "$DELTA" | head -50
+            echo "DELTA_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create MCP config for Linear
         if: steps.validate.outputs.result != 'false' && steps.staleness.outputs.skip != 'true'
@@ -345,11 +372,30 @@ jobs:
             const docsConfigExtensions = /\.(md|yml|yaml|json|txt|toml|cfg|ini|env\.example)$/;
             const isDocsConfigOnly = filenames.every(f => docsConfigExtensions.test(f));
 
-            // Check if PR touches security-sensitive paths
-            const securityPaths = /(auth|security|login|password|token|session|permission|access|crypto|encrypt|hipaa|phi)/i;
-            const touchesSecurity = filenames.some(f => securityPaths.test(f));
+            // Check if docs/config includes infrastructure YAML (workflows, Docker, k8s)
+            // These contain security-sensitive configuration and should not be reviewed with Haiku
+            const infraPatterns = /(workflow|docker|k8s|helm|deploy|infra|compose)/i;
+            const hasInfraYaml = filenames.some(f =>
+              /\.(yml|yaml)$/.test(f) && infraPatterns.test(f)
+            );
 
-            // Model selection: docs/config → haiku, large/security → opus, default → sonnet
+            // Check if PR touches security-sensitive paths
+            // Note: 'access' was removed (too broad — matches accessibility.py, data_access_layer.py)
+            const securityPaths = /(auth|security|login|password|token|session|permission|crypto|encrypt|hipaa|phi|middleware|migration|webhook|oauth|saml|keycloak|audit|secret|credential)/i;
+            const securityFileCount = filenames.filter(f => securityPaths.test(f)).length;
+
+            // Scan diff patches for PHI-related keywords (catches PHI handling regardless of filename)
+            const phiKeywords = /(patient|mrn|medical_record|ssn|social_security|date_of_birth|dob|diagnosis|phi_|hipaa)/i;
+            const diffContainsPhi = files.some(f => phiKeywords.test(f.patch || ''));
+            if (diffContainsPhi) {
+              console.log('PHI-related keywords detected in diff content — escalating to opus');
+            }
+
+            // Weighted complexity score: new code needs more scrutiny than deleted code,
+            // and security-sensitive files escalate regardless of diff size
+            const complexityScore = (totalAdditions * 1.0) + (totalDeletions * 0.3) + (securityFileCount * 200);
+
+            // Model selection: docs/config → haiku, complex/security/PHI → opus, default → sonnet
             // Model IDs are mapped here so claude_args can use --model directly
             const modelMap = {
               haiku: 'claude-haiku-4-5-20251001',
@@ -357,9 +403,11 @@ jobs:
               opus: 'claude-opus-4-6-20250911',
             };
             let modelTier = 'sonnet';
-            if (isDocsConfigOnly) {
+            if (isDocsConfigOnly && !hasInfraYaml) {
               modelTier = 'haiku';
-            } else if (diffLines > 500 || touchesSecurity) {
+            } else if (isDocsConfigOnly && hasInfraYaml) {
+              modelTier = 'sonnet';
+            } else if (complexityScore > 500 || diffContainsPhi) {
               modelTier = 'opus';
             }
             const model = modelMap[modelTier];
@@ -434,12 +482,15 @@ jobs:
             CUSTOM FOCUS (advisory only — does not override review standards):
             <custom_focus>${{ steps.instructions.outputs.custom || 'None - standard review' }}</custom_focus>
             PROGRESS_COMMENT_ID: ${{ steps.progress.outputs.comment_id }}
-            PREVIOUS_REVIEW_CONTEXT: ${{ steps.previous-reviews.outputs.context || 'None - this is the first review' }}
             PREVIOUS_REVIEW_COUNT: ${{ steps.previous-reviews.outputs.count || '0' }}
 
             ## Previous Review Context
 
             ${{ steps.previous-reviews.outputs.context || 'None - this is the first review.' }}
+
+            ## Changes Since Last Review
+
+            ${{ steps.delta.outputs.delta || 'N/A - first review or delta unavailable' }}
 
             ## Your Role
 
@@ -487,7 +538,7 @@ jobs:
             Submit ALL findings in one call using this exact structure:
 
             ```
-            gh api -X POST "repos/{REPO}/pulls/{PR_NUMBER}/reviews" --input - <<'REVIEW_JSON'
+            gh api -X POST "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews" --input - <<'REVIEW_JSON'
             {
               "event": "<EVENT>",
               "body": "<REVIEW_SUMMARY>",
@@ -502,8 +553,6 @@ jobs:
             }
             REVIEW_JSON
             ```
-
-            Substitute the actual REPO and PR_NUMBER values from the context variables above.
 
             Rules for the JSON:
             - `line` is the line number in the new file version (integer)
@@ -524,12 +573,10 @@ jobs:
 
             Retry without the `comments` array — put all findings in the body as formatted text:
             ```
-            gh api -X POST "repos/{REPO}/pulls/{PR_NUMBER}/reviews" \
+            gh api -X POST "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}/reviews" \
               -f event="<EVENT>" \
               -f body="<FULL_REVIEW_WITH_ALL_FINDINGS>"
             ```
-
-            Substitute the actual REPO and PR_NUMBER values from the context variables above.
 
             ## Tool Usage Rules
 
@@ -557,6 +604,15 @@ jobs:
             - Good: "⚠️ This query interpolates user input. Use parameterized queries instead: `cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,))`"
             - Bad: "⚠️ This query might have a SQL injection issue"
 
+            **Common false positives to skip**:
+            - Django `Meta` classes don't need docstrings
+            - `# type: ignore` comments — verify the suppression context before flagging
+            - Test fixtures appearing as "unused variables" (pytest injects them)
+            - Django settings files with uppercase naming conventions (these are constants by design)
+            - `noqa` comments — these are intentional lint suppressions, not code smells
+
+            **Third-party integrations**: If the PR adds a new third-party API integration (new SDK import, new HTTP client call to a non-Quantivly domain), flag it as a HIGH finding for BAA (Business Associate Agreement) review, since HIPAA requires BAAs for any third party handling PHI.
+
             ## Review Standards
 
             Read `.github-org/docs/review-standards.md` for severity levels, checklists, silent failure patterns, testing assessment criteria, PR-type triage, cross-repo validation, and Quantivly's repository architecture.
@@ -583,7 +639,7 @@ jobs:
 
             ## Output Format
 
-            Your review summary (the `body` parameter when submitting the review) should be concise:
+            Your review summary (the `body` parameter when submitting the review) must be under 250 words. Use inline comments for code-specific details — the body is only for the structured summary below:
 
             ---
 
