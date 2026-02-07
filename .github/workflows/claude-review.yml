@@ -400,7 +400,7 @@ jobs:
             const modelMap = {
               haiku: 'claude-haiku-4-5-20251001',
               sonnet: 'claude-sonnet-4-5-20250929',
-              opus: 'claude-opus-4-6-20250911',
+              opus: 'claude-opus-4-6',
             };
             let modelTier = 'sonnet';
             if (isDocsConfigOnly && !hasInfraYaml) {
