@@ -65,6 +65,21 @@ Allocate review attention proportionally. Not every checklist item applies to ev
 
 **Action Required**: Use developer judgment. Good to address but not blocking.
 
+### Severity Decision Heuristic
+
+When the boundary between HIGH and Suggestion is unclear, apply this test:
+
+> **"If this code ships as-is, will it cause a user-visible problem within the first week?"**
+
+| Answer | Severity |
+|--------|----------|
+| Yes, reliably | HIGH |
+| Yes, under specific but realistic conditions | HIGH |
+| Possibly, but only under unlikely conditions | Suggestion |
+| No, but the code could be better | Suggestion |
+
+**Example**: A missing null check on a field that's always populated by the ORM → **Suggestion** (unlikely to be null). A missing null check on user-submitted API input → **HIGH** (realistic condition).
+
 ## Security Review Checklist
 
 ### OWASP Top 10
@@ -387,6 +402,35 @@ Quantivly builds healthcare analytics software, which means:
 - **Code Style**: Black (120 line-length), isort, Ruff, pre-commit hooks
 - **Testing**: pytest with `--dockers-host` for integration tests
 
+## Framework-Specific Review Patterns
+
+### Django (sre-core)
+
+Watch for these common Django anti-patterns:
+
+| Pattern | Why It Matters | Fix |
+|---------|---------------|-----|
+| `QuerySet.all()` in views without pagination | Unbounded result sets cause OOM on large tables | Use `Paginator` or limit with `[:N]` |
+| Missing `select_related`/`prefetch_related` on FK traversals | N+1 queries — each row triggers a separate DB query | Add to the initial queryset |
+| `Model.save()` without `update_fields` | Full row write — overwrites concurrent changes | Pass `update_fields=['field1', 'field2']` |
+| Celery tasks without `bind=True` and retry logic | Transient failures silently drop tasks | Add `bind=True`, `autoretry_for`, `max_retries` |
+| GraphQL resolvers bypassing Django's permission system | Authorization checks skipped for API queries | Use `@permission_required` or check in resolver |
+| Raw SQL without parameterization | SQL injection risk in custom queries | Use `cursor.execute(sql, params)` with `%s` placeholders |
+| `except Exception` in view/API handlers | Masks unrelated errors (import, memory) as user errors | Catch specific exceptions (`ValueError`, `ObjectDoesNotExist`) |
+
+### Next.js (sre-ui)
+
+Watch for these common Next.js anti-patterns:
+
+| Pattern | Why It Matters | Fix |
+|---------|---------------|-----|
+| Client-side fetch when SSR/SSG is appropriate | Unnecessary loading states, worse SEO, slower TTFB | Use `getServerSideProps` or `getStaticProps` |
+| Missing `key` props in list rendering | React can't track list items, causes rendering bugs | Add stable, unique `key` from data (not array index) |
+| Large library imports without tree-shaking | Bundle size bloat — entire library shipped to client | Use `dynamic(() => import(...))` or named imports |
+| Sensitive data in `NEXT_PUBLIC_*` env vars | Client-visible — anyone can read from browser | Use server-only env vars with API routes |
+| Missing error boundaries around data components | One failed component crashes the entire page | Wrap data-dependent sections with `ErrorBoundary` |
+| Inline styles or `sx` props for reusable patterns | Style duplication, inconsistent theming | Extract to shared styled components or CSS modules |
+
 ## Continuous Improvement
 
 This document should evolve based on:
@@ -397,8 +441,15 @@ This document should evolve based on:
 
 **Review quarterly** and update based on data from `claude-metrics.py` reports.
 
+## Changelog
+
+- **2026-02-07**: Added framework-specific patterns (Django, Next.js), severity decision heuristic, changelog section
+- **2026-02-06**: Added few-shot review examples, adaptive comment caps, silent failure patterns, testing assessment approach
+- **2026-02-05**: Added PR-type triage matrix, cross-repository validation section
+- **2026-02-03**: Separated project-level findings from inline comments, tool allocation table
+
 ---
 
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-07
 **Owner**: Engineering Team
 **Related**: [Claude Integration Guide](claude-integration-guide.md), [Review Examples](review-examples.md), Repository CLAUDE.md files

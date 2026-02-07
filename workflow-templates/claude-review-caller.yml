@@ -7,7 +7,7 @@ on:
 # Ensure only one review runs per PR at a time
 concurrency:
   group: claude-review-${{ github.event.issue.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read

@@ -123,5 +123,220 @@ This document provides concrete examples of complete Claude reviews for referenc
 
 ---
 
-**Last Updated**: 2026-02-06
+## Example 5: Docs/Config Review with Haiku (APPROVE)
+
+**Scenario**: PR updates README and adds a YAML configuration file. Haiku is auto-selected because all files are docs/config.
+
+### Review JSON submitted via `gh api`:
+
+```json
+{
+  "event": "APPROVE",
+  "body": "**Summary**: Updates project README with new deployment instructions and adds Helm chart values template.\n\n**Linear**: OPS-456 - ✅ Aligned (adds deployment docs as requested)\n\n**Issues**: 0 critical, 0 high, 1 suggestion — see inline comments\n\n**Highlights**:\n- ✅ Clear step-by-step deployment instructions with prerequisites\n- ✅ Helm values template includes sensible defaults with comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12349)</sub>",
+  "comments": [
+    {
+      "path": "docs/deployment.md",
+      "line": 28,
+      "side": "RIGHT",
+      "body": "💡 The example `POSTGRES_PASSWORD=changeme` could be mistaken for a real credential and accidentally committed as-is. Consider using a clearly placeholder value like `<your-password-here>` or referencing a secrets manager instead."
+    }
+  ]
+}
+```
+
+### Why this is a good docs/config review:
+
+- **Appropriate depth for non-code PR** — one lightweight suggestion, not over-analyzed
+- **APPROVE despite having a suggestion** — docs PRs don't need to block on minor feedback
+- **Finding is practical** — placeholder credentials in docs is a real problem worth flagging
+- **No code-quality comments** — no linting, formatting, or complexity feedback on documentation
+
+---
+
+## Example 6: Large PR with Opus and Comment Cap (COMMENT)
+
+**Scenario**: A 700-line PR refactoring the authentication middleware. Opus is selected due to security paths and size. Comment cap is 12 but there are 15 findings — the review triages to show only the most critical ones inline.
+
+### Review JSON submitted via `gh api`:
+
+```json
+{
+  "event": "COMMENT",
+  "body": "**Summary**: Refactors authentication middleware to support multi-tenant Keycloak realms with per-facility token validation.\n\n**Linear**: HUB-2345 - ✅ Aligned (implements all 4 acceptance criteria for multi-tenant auth)\n\n**Issues**: 0 critical, 3 high, 2 suggestions — see inline comments. 3 additional suggestions omitted from inline comments due to comment cap:\n- `middleware/keycloak.py:142` — Consider caching realm discovery documents to reduce auth latency\n- `middleware/keycloak.py:198` — The `max_retries=5` constant could be extracted to settings for configurability\n- `tests/test_auth.py:67` — Missing test for expired token with valid realm but revoked permissions\n\n**Highlights**:\n- ✅ Token validation uses RS256 with JWKS endpoint (not shared secrets)\n- ✅ Per-facility realm isolation prevents cross-tenant data access\n- ✅ Comprehensive test suite with 12 test cases covering happy path and error scenarios\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12350)</sub>",
+  "comments": [
+    {
+      "path": "middleware/keycloak.py",
+      "line": 67,
+      "side": "RIGHT",
+      "body": "⚠️ The `audience` claim is not validated during token verification. An attacker with a valid token from a different Keycloak client could access this service's endpoints.\n\nFix: Add audience validation to the token decode:\n```python\ndecoded = jwt.decode(\n    token, key,\n    algorithms=['RS256'],\n    audience=settings.KEYCLOAK_CLIENT_ID,  # Add this\n)\n```"
+    },
+    {
+      "path": "middleware/keycloak.py",
+      "line": 89,
+      "side": "RIGHT",
+      "body": "⚠️ `requests.get(jwks_url)` has no timeout. If the Keycloak server is slow or unreachable, this blocks the request thread indefinitely.\n\nFix: Add a timeout:\n```python\nresponse = requests.get(jwks_url, timeout=5)\n```"
+    },
+    {
+      "path": "middleware/keycloak.py",
+      "line": 112,
+      "side": "RIGHT",
+      "body": "⚠️ The `except Exception` block catches all errors during token decode (including `ImportError`, `MemoryError`) and returns 401. This masks unrelated failures as authentication errors.\n\nFix: Catch specific JWT exceptions:\n```python\nexcept (jwt.ExpiredSignatureError, jwt.InvalidTokenError, jwt.DecodeError) as e:\n    logger.warning('Token validation failed: %s', e)\n    return JsonResponse({'error': 'Invalid token'}, status=401)\n```"
+    },
+    {
+      "path": "middleware/keycloak.py",
+      "line": 156,
+      "side": "RIGHT",
+      "body": "💡 The realm-to-facility mapping is loaded from the database on every request. For high-traffic endpoints, this adds a query per request. Consider using Django's `cache_page` or a TTL-based in-memory cache with a 5-minute expiry."
+    },
+    {
+      "path": "tests/test_auth.py",
+      "line": 34,
+      "side": "RIGHT",
+      "body": "💡 The test JWT is constructed with `HS256` algorithm, but production uses `RS256`. This means the test doesn't exercise the JWKS key retrieval path. Consider using `PyJWT`'s `jwt.encode()` with an RSA test key to match production behavior."
+    }
+  ]
+}
+```
+
+### Why this is a good large PR review:
+
+- **Prioritized findings** — the 3 inline ⚠️ findings are highest impact (security, reliability, error masking); lower-priority items are in the body
+- **Comment cap explained** — body clearly lists 3 additional suggestions that didn't fit, with file:line references
+- **Linear validation is thorough** — references 4 acceptance criteria
+- **Highlights are specific** — RS256, per-facility isolation, test count — not generic praise
+
+---
+
+## Example 7: Review with Custom Instructions (COMMENT)
+
+**Scenario**: Developer commented `@claude focus on N+1 queries and database performance`. The custom instructions are incorporated into the review focus.
+
+### Review JSON submitted via `gh api`:
+
+```json
+{
+  "event": "COMMENT",
+  "body": "**Summary**: Adds facility dashboard endpoint aggregating study counts, equipment utilization, and alert summaries.\n\n**Linear**: HUB-3456 - ✅ Aligned\n\n**Custom focus**: N+1 queries and database performance (as requested)\n\n**Issues**: 0 critical, 2 high, 1 suggestion — see inline comments\n\n**Highlights**:\n- ✅ Good use of `annotate()` for study count aggregation (avoids per-facility query)\n- ✅ Dashboard response is paginated (won't unboundedly grow)\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12351)</sub>",
+  "comments": [
+    {
+      "path": "apps/dashboard/resolvers.py",
+      "line": 45,
+      "side": "RIGHT",
+      "body": "⚠️ N+1 query: `facility.equipment_set.all()` inside the list comprehension executes a separate query for each facility. With 50 facilities, this is 50 additional queries.\n\nFix: Add `prefetch_related` to the initial queryset:\n```python\nfacilities = Facility.objects.filter(\n    organization=org\n).prefetch_related('equipment_set').annotate(\n    study_count=Count('studies')\n)\n```"
+    },
+    {
+      "path": "apps/dashboard/resolvers.py",
+      "line": 72,
+      "side": "RIGHT",
+      "body": "⚠️ `Alert.objects.filter(facility=facility, resolved=False).count()` inside the loop creates another N+1 pattern. This can be aggregated in one query.\n\nFix: Use a subquery annotation:\n```python\nfrom django.db.models import Subquery, OuterRef\n\nopen_alerts = Alert.objects.filter(\n    facility=OuterRef('pk'), resolved=False\n).values('facility').annotate(c=Count('*')).values('c')\n\nfacilities = facilities.annotate(open_alert_count=Subquery(open_alerts))\n```"
+    },
+    {
+      "path": "apps/dashboard/resolvers.py",
+      "line": 88,
+      "side": "RIGHT",
+      "body": "💡 The `last_activity` field calls `studies.order_by('-created_at').first()` per facility. Since you're already querying facilities, consider adding `.annotate(last_activity=Max('studies__created_at'))` to get this in the same query."
+    }
+  ]
+}
+```
+
+### Why this is a good custom-instruction review:
+
+- **Custom focus is acknowledged** — the body includes a "Custom focus" line showing what was requested
+- **Findings align with focus** — all 3 findings are database performance issues, matching the developer's request
+- **Standard review isn't abandoned** — security and logic checks still ran (just no findings in those areas)
+- **All findings are N+1 or query optimization** — demonstrating the custom focus was effective
+
+---
+
+## Anti-Examples: What Bad Reviews Look Like
+
+These examples show common failure modes to avoid.
+
+### Anti-Example A: Flagging Formatting Issues (ruff's Job)
+
+**What went wrong**: The review flags import sorting and line length — issues that pre-commit hooks (ruff, black) already handle.
+
+```json
+{
+  "comments": [
+    {
+      "path": "apps/export/views.py",
+      "line": 3,
+      "side": "RIGHT",
+      "body": "💡 Imports should be sorted alphabetically. `from datetime import date` should come before `from django.http import JsonResponse`."
+    },
+    {
+      "path": "apps/export/views.py",
+      "line": 45,
+      "side": "RIGHT",
+      "body": "💡 This line exceeds 120 characters. Consider breaking it into multiple lines for readability."
+    }
+  ]
+}
+```
+
+**Why this is wrong**:
+- Import sorting is ruff/isort's responsibility — Claude should never flag this
+- Line length violations are caught by black/ruff formatters
+- These comments waste developer attention on issues that would be caught automatically
+- The review missed actual logic issues because it focused on trivial style problems
+
+---
+
+### Anti-Example B: Re-Flagging Unchanged Code on Re-Review
+
+**What went wrong**: On a re-review, the reviewer flagged the same issues from the previous review on code that hasn't changed, creating duplicate noise.
+
+```json
+{
+  "event": "COMMENT",
+  "body": "**Summary**: Re-reviewing CSV export endpoint.\n\n**Prior reviews**: Re-review #2.\n\n**Issues**: 0 critical, 1 high, 0 suggestions",
+  "comments": [
+    {
+      "path": "apps/export/views.py",
+      "line": 62,
+      "side": "RIGHT",
+      "body": "⚠️ When `queryset` is empty, `csv.writer` still writes the header row but the response Content-Disposition suggests a data file. Consider returning a 204 No Content."
+    }
+  ]
+}
+```
+
+**Why this is wrong**:
+- This exact finding was already in the previous review (Example 1, second comment)
+- The code at line 62 hasn't changed since the last review — the diff shows no modifications
+- The developer already has this feedback visible in the PR conversation
+- Re-flagging creates the impression that the review didn't read its own prior context
+- Correct behavior: acknowledge in the body ("1 prior suggestion on empty dataset handling remains open") without a new inline comment
+
+---
+
+### Anti-Example C: Vague Finding Without Concrete Fix
+
+**What went wrong**: The finding identifies a potential issue category but doesn't explain the specific problem or provide a fix.
+
+```json
+{
+  "comments": [
+    {
+      "path": "apps/auth/middleware.py",
+      "line": 28,
+      "side": "RIGHT",
+      "body": "⚠️ This could be a security issue. Consider reviewing the authentication logic for potential vulnerabilities."
+    }
+  ]
+}
+```
+
+**Why this is wrong**:
+- "Could be a security issue" doesn't explain what the issue actually is
+- "Consider reviewing" is not actionable — the developer already submitted this for review
+- No code fix is provided — the developer doesn't know what to change
+- If the reviewer can't articulate the specific vulnerability, it shouldn't be an inline comment
+- Correct behavior: either explain the specific issue with a fix (e.g., "missing CSRF token validation — add `@csrf_protect` decorator") or omit it entirely
+
+---
+
+**Last Updated**: 2026-02-07
 **Related**: [Review Standards](review-standards.md)

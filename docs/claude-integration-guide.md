@@ -10,7 +10,7 @@
 Quantivly uses Claude (Anthropic's AI) to provide automated, high-quality code reviews for all pull requests. Claude analyzes your code for security vulnerabilities, logic errors, code quality issues, test coverage gaps, and performance problems — all before human review.
 
 **Key Features**:
-- ⚡ **Fast reviews** - 2-5 minutes typical turnaround
+- ⚡ **Fast reviews** - 1-7 minutes depending on model tier (shown in progress comment)
 - 🔒 **Security-focused** - OWASP Top 10, HIPAA compliance, injection attacks
 - 📋 **Linear integration** - Validates alignment with issue requirements
 - 🎯 **Multi-focus analysis** - Security, logic, quality, testing, performance
@@ -56,7 +56,7 @@ That's it! Claude will:
 1. Analyze your code changes
 2. Fetch Linear issue context
 3. Check against repository conventions
-4. Post a structured review in 2-5 minutes
+4. Post a structured review (duration varies by model tier — shown in progress comment)
 
 ### 3. Address Feedback
 
@@ -307,7 +307,12 @@ pre-commit run --all-files
 
 ### Q: How long does a review take?
 
-**A**: Typically 2-5 minutes. Complex PRs (many files, large diffs) may take longer.
+**A**: Depends on the auto-selected model tier:
+- **Haiku** (docs/config PRs): ~1-2 minutes
+- **Sonnet** (standard code PRs): ~2-4 minutes
+- **Opus** (large/security-sensitive PRs): ~3-7 minutes
+
+The progress comment shows which model is being used and the expected duration.
 
 ---
 
@@ -407,7 +412,7 @@ gh pr create \
 # 5. Request Claude review (on GitHub PR page)
 # Comment: @claude
 
-# 6. Wait 2-5 minutes, read review
+# 6. Wait for review (progress comment shows model tier and expected time)
 
 # 7. Fix any CRITICAL/HIGH issues
 vim src/export.py

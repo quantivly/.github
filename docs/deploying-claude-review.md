@@ -9,9 +9,22 @@ The Claude PR review system uses a **reusable workflow** pattern:
 - **Central workflow**: Lives in `quantivly/.github/.github/workflows/claude-review.yml`
 - **Caller workflows**: Minimal files in each repository's `.github/workflows/` directory
 - **Secrets**: Automatically inherited from organization secrets
-- **Plugins**: `pr-review-toolkit` and `superpowers` for enhanced analysis
-
 This maintains a single source of truth while allowing easy deployment to any repository.
+
+### Architecture
+
+```mermaid
+flowchart LR
+    A["PR Comment<br/>(@claude)"] --> B["Caller Workflow<br/>(per-repo)"]
+    B --> C["Central Workflow<br/>(.github repo)"]
+    C --> D["Validate<br/>Permissions"]
+    D --> E["Extract Context<br/>(Linear, custom instructions,<br/>previous reviews)"]
+    E --> F["Assess Complexity<br/>(model selection,<br/>comment cap)"]
+    F --> G["Claude Action<br/>(review analysis)"]
+    G --> H["Post-Review<br/>(metrics, cleanup)"]
+```
+
+**Flow**: A `@claude` comment on a PR triggers the repo's caller workflow, which delegates to the central reusable workflow in the `.github` repository. The central workflow validates permissions, gathers context (Linear issue, previous reviews, custom instructions), assesses PR complexity to select the appropriate model tier, runs the Claude review action, and handles post-review tasks (metrics injection, progress comment cleanup, error reporting).
 
 ## What Changed (v2.0 Migration)
 
@@ -21,8 +34,7 @@ The review system was migrated from a custom Python script to the official `anth
 |---------|---------------------|------------------------|
 | Review Engine | Custom `claude-review.py` | `anthropics/claude-code-action@v1` |
 | Inline Comments | Manual position mapping | Batched via GitHub Reviews API `comments` array |
-| Plugins | None | `pr-review-toolkit`, `superpowers` |
-| Progress Tracking | None | Built-in with checkboxes |
+| Progress Tracking | None | Built-in with milestones |
 | Retry Logic | Custom retry wrapper | Built-in |
 | Maintenance | Manual updates | Anthropic-maintained |
 
@@ -99,6 +111,10 @@ The workflow automatically selects the Claude model based on PR complexity:
 | Large diffs (>500 lines) or security-sensitive paths | Opus 4.6 | ~$2.00-3.00 |
 
 Security-sensitive paths are detected by filename patterns: `auth`, `security`, `login`, `password`, `token`, `session`, `permission`, `access`, `crypto`, `encrypt`, `hipaa`, `phi`.
+
+### Concurrency
+
+The caller workflow uses `cancel-in-progress: true`. If a developer comments `@claude` twice on the same PR, the second trigger cancels the first review, saving cost and ensuring only the latest review completes.
 
 ### Adaptive Comment Caps
 
@@ -306,10 +322,10 @@ No changes needed in individual repositories unless:
 
 Built-in MCP servers update automatically with the `claude-code-action` version. No manual intervention needed.
 
-To pin a specific action version, update the `uses` line in the central workflow:
+The central workflow pins `anthropics/claude-code-action` to a specific commit SHA for supply chain security. To update the action version, look up the latest commit SHA for the desired tag and update the `uses` line:
 
 ```yaml
-uses: anthropics/claude-code-action@v1  # or pin to a specific SHA
+uses: anthropics/claude-code-action@<commit-sha>  # v1
 ```
 
 ### Removing Claude Review
