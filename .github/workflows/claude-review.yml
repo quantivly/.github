@@ -946,7 +946,7 @@ jobs:
 
           [If PREVIOUS_REVIEW_COUNT > 0: "🔄 **Re-review (PREVIOUS_REVIEW_COUNT + 1)**<br>X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
 
-          ✅ **Highlights**
+          🌟 **Highlights**
           - [Notable good practice]
           - [Another positive]
 
@@ -963,6 +963,8 @@ jobs:
 
           ---
           <sub>@COMMENTER<!-- METRICS --> · [Logs](LOGS_URL) · 👍 👎</sub>
+
+          The `<!-- METRICS -->` marker must appear exactly as shown — do not add content inside it (no colons, no key-value pairs). The post-processing step replaces it with execution metrics.
 
           ---
 
@@ -1258,8 +1260,9 @@ jobs:
               per_page: 100,
             });
 
+            const metricsRegex = /<!-- METRICS[^>]*-->/;
             const claudeReview = reviews
-              .filter(r => (r.body || '').includes('<!-- METRICS -->'))
+              .filter(r => metricsRegex.test(r.body || ''))
               .pop();
 
             if (!claudeReview) {
@@ -1269,7 +1272,7 @@ jobs:
 
             const body = claudeReview.body;
 
-            const updatedBody = body.replace('<!-- METRICS -->', metricsStr);
+            const updatedBody = body.replace(metricsRegex, metricsStr);
 
             await github.rest.pulls.updateReview({
               owner: context.repo.owner,
