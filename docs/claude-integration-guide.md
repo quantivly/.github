@@ -293,6 +293,8 @@ Claude explains **WHY** something is an issue, not just **WHAT**. Read the expla
 
 If you make substantial changes (not just minor tweaks), comment `@claude` again to verify fixes. Re-reviews are context-aware: Claude reads its previous review findings and focuses on new or changed code rather than repeating the same feedback. Fixed issues are acknowledged in the summary rather than re-flagged.
 
+If no code has changed since the last review, `@claude` will skip the re-review to save cost. To bypass this check (e.g., after updating review prompts or Linear requirements), use `@claude force`.
+
 ### 5. Don't Ignore Security Findings
 
 Security issues are **always** worth fixing, even if they seem unlikely. Healthcare data requires extra caution.
@@ -377,6 +379,8 @@ You can always re-trigger by commenting `@claude` again.
 - Prior findings addressed incorrectly or incompletely
 
 Fixed issues are acknowledged in the summary but not re-flagged as inline comments. The review body includes a "Prior reviews" line showing the review count and how many prior findings were addressed.
+
+If no code has changed since the last review, `@claude` will skip to avoid redundant reviews. Use `@claude force` to bypass this check when you need a fresh review on unchanged code (e.g., testing updated review prompts, getting a second opinion, or validating after Linear requirements change).
 
 ---
 
@@ -498,6 +502,23 @@ gh pr merge --squash
 ---
 
 ## Advanced Usage
+
+### Force Re-Review
+
+By default, `@claude` skips the review if no code has changed since the last review. Use `@claude force` to bypass this staleness check.
+
+**Syntax**:
+- `@claude force` — full re-review with no custom focus
+- `@claude force focus on security` — re-review with custom instructions
+- `@claude force, check auth` — comma separator also works
+
+**When to use**:
+- Testing updated review prompts or standards
+- Getting a second opinion after discussion
+- Re-validating after Linear requirements change
+- Reviewing after dependency updates (no code diff but different behavior)
+
+---
 
 ### Local Development with Claude Code CLI
 

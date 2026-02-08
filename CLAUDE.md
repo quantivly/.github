@@ -221,6 +221,7 @@ Quantivly uses automated Claude-powered code reviews for pull requests. For comp
 2. Comment `@claude` on the PR (optionally add focus: `@claude focus on security`)
 3. Wait for review (Haiku: ~1-2 min, Sonnet: ~2-4 min, Opus: ~3-7 min)
 4. Fix CRITICAL/HIGH issues, then request human review
+5. Use `@claude force` to re-review unchanged code (bypasses staleness check)
 
 See [Integration Guide](docs/claude-integration-guide.md) for complete usage details.
 
@@ -243,7 +244,7 @@ See [Deploying Claude Review](docs/deploying-claude-review.md) for setup guide.
 - **Security escalation**: Small changes to auth-related files automatically escalate to Opus
 - **Adaptive comment caps**: Scales with diff size (min 3, max 12 for Sonnet, max 18 for Opus)
 - **PR size advisory**: Reviews on 500+ line PRs include advisory about optimal PR size
-- **Context-aware re-reviews**: Reads previous findings, skips stale re-reviews on unchanged commits
+- **Context-aware re-reviews**: Reads previous findings, skips stale re-reviews on unchanged commits (`@claude force` to bypass)
 - **Linear validation**: Fetches issue requirements and validates alignment
 - **Custom focus**: `@claude focus on security` prioritizes specific areas
 - **Cost alerting**: Reviews exceeding $5 suggest PR size reduction

@@ -143,18 +143,31 @@ jobs:
             // workflow_call events have no comment payload
             if (context.eventName === 'workflow_call') {
               core.setOutput('custom', '');
+              core.setOutput('force', 'false');
               return;
             }
             const body = context.payload.comment.body;
             const match = body.match(/@claude\b[,:]?\s*(.*)/is);
             if (!match) {
               core.setOutput('custom', '');
+              core.setOutput('force', 'false');
               return;
             }
             let instructions = match[1].trim();
+
+            // Detect `force` as first word (case-insensitive, optional comma/colon separator)
+            let forceReview = false;
+            const forceMatch = instructions.match(/^force\b[,:]?\s*/i);
+            if (forceMatch) {
+              forceReview = true;
+              instructions = instructions.substring(forceMatch[0].length).trim();
+              console.log('Force flag detected — will bypass staleness check');
+            }
+
             const generic = ['', 'review', 'please review', 'review this', 'please review this', 'review this pr', 'please review this pr'];
             if (generic.includes(instructions.toLowerCase())) {
               core.setOutput('custom', '');
+              core.setOutput('force', forceReview ? 'true' : 'false');
               return;
             }
             // Truncate to prevent prompt stuffing
@@ -162,6 +175,7 @@ jobs:
               instructions = instructions.substring(0, 2000) + '... (truncated)';
             }
             core.setOutput('custom', instructions);
+            core.setOutput('force', forceReview ? 'true' : 'false');
 
       - name: Fetch previous review context
         id: previous-reviews
@@ -265,6 +279,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const forceFlag = '${{ steps.instructions.outputs.force }}' === 'true';
+
+            if (forceFlag) {
+              console.log('Force flag set — bypassing staleness check');
+              core.setOutput('skip', 'false');
+              return;
+            }
+
             const prNumber = context.issue.number;
             const repo = context.repo;
             const lastReviewCommit = '${{ steps.previous-reviews.outputs.last_review_commit }}';
@@ -310,7 +332,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `🔄 **Skipping review** — no code changes since the last review (${count} prior reviews on the same commit). Previous review findings still apply.\n\nPush new commits and then trigger \`@claude\` again for a fresh review.`,
+              body: `🔄 **Skipping review** — no code changes since the last review (${count} prior reviews on the same commit). Previous review findings still apply.\n\nPush new commits and then trigger \`@claude\` again for a fresh review.\n\n_Tip: Use \`@claude force\` to bypass this check and re-review unchanged code._`,
             });
 
       - name: Compute diff since last review
@@ -1057,6 +1079,7 @@ jobs:
           TRIGGERED_BY: ${{ github.event.comment.user.login }}
           LINEAR_ID: ${{ steps.linear.outputs.linear_id }}
           CUSTOM_INSTRUCTIONS: ${{ steps.instructions.outputs.custom }}
+          FORCE_FLAG: ${{ steps.instructions.outputs.force || 'false' }}
           PROGRESS_COMMENT_ID: ${{ steps.progress.outputs.comment_id }}
           METRIC_DURATION: ${{ steps.extract-metrics.outputs.duration || 'N/A' }}
           METRIC_COST: ${{ steps.extract-metrics.outputs.cost || 'N/A' }}
@@ -1074,6 +1097,7 @@ jobs:
           echo "- Triggered by: @${TRIGGERED_BY}" >> $GITHUB_STEP_SUMMARY
           echo "- Linear Issue: ${LINEAR_ID:-Not specified}" >> $GITHUB_STEP_SUMMARY
           echo "- Custom Focus: ${CUSTOM_INSTRUCTIONS:-Standard review}" >> $GITHUB_STEP_SUMMARY
+          echo "- Force: ${FORCE_FLAG}" >> $GITHUB_STEP_SUMMARY
           echo "- Progress Comment ID: ${PROGRESS_COMMENT_ID:-N/A}" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
