@@ -624,12 +624,17 @@ jobs:
               lines.push(`❌ Failed (${failed.length}):`);
               for (const cr of failed.slice(0, 10)) {
                 const time = cr.completed_at ? relativeTime(cr.completed_at) : '';
-                const url = cr.html_url || '';
-                lines.push(`  - ${cr.name}: ${cr.conclusion || 'failed'}${time ? ` (${time})` : ''}${url ? ` — ${url}` : ''}`);
+                const name = cr.html_url ? `[${cr.name}](${cr.html_url})` : cr.name;
+                // Extract run ID from html_url (format: .../actions/runs/<id>/job/...)
+                const runIdMatch = (cr.html_url || '').match(/\/actions\/runs\/(\d+)/);
+                const runId = runIdMatch ? runIdMatch[1] : '';
+                lines.push(`  - ${name}: ${cr.conclusion || 'failed'}${time ? ` (${time})` : ''}${runId ? ` [run ${runId}]` : ''}`);
               }
               if (failed.length > 10) {
                 lines.push(`  - ... and ${failed.length - 10} more`);
               }
+              lines.push('');
+              lines.push('Investigate with: gh run view <run-id> --log-failed');
             }
             if (passed.length > 0) {
               lines.push(`✅ Passed (${passed.length}):`);
