@@ -923,11 +923,11 @@ jobs:
           **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]. If no Linear issue is found, use "Not specified" instead of the link.
 
           **CI**: [If CI_FAILING is true, use this exact structure:]
-          N check(s) failing:
           - [❌ `check-name`](run-url) (time ago)
 
-          > **Root cause**: 1-2 sentence summary from your CI log investigation. Include what failed, why, and an actionable fix.
+          > **Root cause**: 1-2 sentence summary from your CI log investigation. Include what failed, why, and an actionable fix. If multiple checks are failing, note whether the failures share a root cause or are independent issues.
 
+          [Do NOT include a "N check(s) failing" count line — the bulleted list is self-explanatory.]
           [If checks still pending: "**CI**: ⏳ N check(s) still running — review proceeds without CI signal." If all pass or CI unavailable: omit the **CI** line entirely.]
 
           **Re-review**: [If PREVIOUS_REVIEW_COUNT > 0: "Re-review #(PREVIOUS_REVIEW_COUNT + 1). X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
