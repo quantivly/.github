@@ -275,7 +275,11 @@ The review workflow automatically fetches CI check run status for the PR's head 
 
 ### Implementation
 
-The workflow waits up to 5 minutes for pending CI checks to complete before starting the review. The review workflow's own check run (`Claude PR Review`) is excluded from CI status to avoid self-referencing. Failed checks include relative timestamps (e.g., "2h ago") to help assess staleness.
+The workflow waits up to 5 minutes for pending CI checks to complete before starting the review. The review workflow's own check run (`Claude PR Review`) is excluded from CI status to avoid self-referencing. Failed checks include relative timestamps (e.g., "2h ago") to help assess staleness. Failed check names are hyperlinked to their run URLs for one-click navigation to the failure details.
+
+### Cross-Repo Investigation
+
+When CI failures involve cross-repository dependencies (e.g., npm/pip can't fetch a commit, branch, or version from another repo), Claude investigates beyond the CI logs to verify the referenced resource exists. This uses `gh api` to check commits, branches, and PRs in the referenced repository, and reports findings like "branch was force-pushed", "commit unreachable", or "PR merged — update to released version".
 
 ### Why CI Failures Block APPROVE
 
@@ -486,6 +490,7 @@ This document should evolve based on:
 
 ## Changelog
 
+- **2026-02-08**: CI reviews now hyperlink failed check names to run URLs and investigate cross-repo dependency failures
 - **2026-02-08**: Added CI Status section — reviews now check CI health and block APPROVE when checks are failing
 - **2026-02-07**: Added GitHub suggestion block guidance for inline comments, bolded short titles format, suggestion vs regular code block rules
 - **2026-02-07**: Added false-positive exclusion list, BAA guidance for third-party integrations, framework-specific patterns (Django, Next.js), severity decision heuristic, changelog section

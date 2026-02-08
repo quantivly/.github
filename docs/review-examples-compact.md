@@ -91,19 +91,19 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 
 ---
 
-## Example 4: CI Failing — REQUEST_CHANGES with No Code Findings
+## Example 4: CI Failing — REQUEST_CHANGES with Investigation
 
-**Scenario**: PR has clean code but the Docker build CI check has been failing for 2 days. No code-level issues found.
+**Scenario**: PR has clean code but the Docker build CI check has been failing for 2 days. The failure involves a cross-repo dependency (npm can't fetch a commit from another repository). No code-level issues found.
 
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## 📋 Summary\n\n> Updates Dockerfile base image and adds health check endpoint.\n\n**Linear**: [SRE-5678](https://linear.app/quantivly/issue/SRE-5678/) — ✅ Aligned\n\n**CI**: ❌ 1 check failing:\n- `Docker Build`: failure (2d ago)\n\nCI checks must pass before this PR can be approved. Please investigate the Docker build failure and push a fix.\n\n**Highlights**:\n- ✅ Proper multi-stage build reduces image size\n- ✅ Health check uses lightweight endpoint\n\n**Issues**: 🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12355) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Updates Dockerfile base image and adds health check endpoint.\n\n**Linear**: [SRE-5678](https://linear.app/quantivly/issue/SRE-5678/) — ✅ Aligned\n\n**CI**: ❌ 1 check failing:\n- [Docker Build](https://github.com/quantivly/sre-core/actions/runs/12355/job/34567): failure (2d ago)\n\nThe build fails at `npm install` — unable to fetch commit `ad9e22c` from `quantivly/sre-ui-components`. Investigated: the commit exists but the branch (`feat/new-tokens`) was force-pushed, making it unreachable. The dependency in `package.json` should be updated to the new HEAD or a released version.\n\n**Highlights**:\n- ✅ Proper multi-stage build reduces image size\n- ✅ Health check uses lightweight endpoint\n\n**Issues**: 🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12355) · 👍 👎</sub>",
   "comments": []
 }
 ```
 
-**Why good**: REQUEST_CHANGES despite no code findings — CI failure is a merge blocker. CI details in body (not inline). Empty comments array since this is a project-level concern. Still includes highlights for the code that was reviewed.
+**Why good**: REQUEST_CHANGES despite no code findings — CI failure is a merge blocker. Failed check name is hyperlinked to the run URL for one-click navigation. Root cause investigation goes beyond CI logs: verified the cross-repo commit status and explains why it's unreachable. Actionable guidance (update to new HEAD or released version). Empty comments array since this is a project-level concern.
 
 ---
 
