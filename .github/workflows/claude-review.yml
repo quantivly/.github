@@ -515,11 +515,12 @@ jobs:
             }
 
             // Helper: fetch all check runs for a SHA, filtering out self
+            // Note: paginate() auto-extracts the check_runs array from the nested
+            // Checks API response — no mapFn needed (adding one breaks extraction)
             async function fetchCheckRuns(sha) {
               const checkRuns = await github.paginate(
                 github.rest.checks.listForRef,
-                { owner: repo.owner, repo: repo.repo, ref: sha, per_page: 100 },
-                (response) => response.data.check_runs
+                { owner: repo.owner, repo: repo.repo, ref: sha, per_page: 100 }
               );
               return checkRuns.filter(cr => cr.name !== SELF_CHECK_NAME);
             }
