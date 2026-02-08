@@ -625,8 +625,8 @@ jobs:
               for (const cr of failed.slice(0, 10)) {
                 const time = cr.completed_at ? relativeTime(cr.completed_at) : '';
                 const name = cr.html_url
-                  ? `[❌ \`${cr.name}\`](${cr.html_url})`
-                  : `❌ \`${cr.name}\``;
+                  ? `[❌ ${cr.name}](${cr.html_url})`
+                  : `❌ ${cr.name}`;
                 lines.push(`  - ${name}${time ? ` (${time})` : ''}`);
               }
               if (failed.length > 10) {
@@ -923,7 +923,7 @@ jobs:
           **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]. If no Linear issue is found, use "Not specified" instead of the link.
 
           **CI**: [If CI_FAILING is true, use this exact structure:]
-          - [❌ `check-name`](run-url) (time ago)
+          - [❌ check-name](run-url) (time ago)
 
           > **Root cause**: 1-2 sentence summary from your CI log investigation. Include what failed, why, and an actionable fix. If multiple checks are failing, note whether the failures share a root cause or are independent issues.
 
