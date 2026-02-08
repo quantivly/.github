@@ -224,13 +224,13 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 ```markdown
 > [1-2 sentences: what the PR does]
 
-**Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
+<img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="18"> [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
 
 **CI**: [If checks failing: bulleted list of `[❌ name](url) (time ago)` + blockquote `> **Root cause**: ...` summary (no count line). For multiple failures, note whether they share a root cause or are independent. If pending: "⏳ N check(s) still running". If all pass or unavailable: omit.]
 
-**Re-review**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
+[If re-review: "🔄 **Re-review #N** — X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
-**Issues**: 🚨 X · ⚠️ Y · 💡 Z — see inline comments
+🚨 X · ⚠️ Y · 💡 Z — see inline comments
 
 [If findings were omitted due to comment cap, add a collapsible <details> block listing them with file:line references.]
 
