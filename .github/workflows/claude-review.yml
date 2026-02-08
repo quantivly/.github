@@ -909,6 +909,11 @@ jobs:
           CI check results are provided in the PR Context below (CI_STATUS and CI_FAILING fields).
 
           - If CI_FAILING is `true`: use `REQUEST_CHANGES` as the review event. **Investigate the failure** before writing the review — use `gh run view <run-id> --log-failed` (extract the run ID from the URL in CI_STATUS) to fetch the failed step logs. Identify the root cause (e.g., build error, test failure, missing dependency) and report it in the review body with actionable guidance. If the failure is related to the PR's changes, explain the connection. If it appears pre-existing or unrelated, note that too. Still include any code-level findings as inline comments.
+            When the failure involves a dependency or cross-repo reference (e.g., npm/pip failing to fetch a commit, branch, or version from another repository), go beyond the CI logs — verify the referenced resource exists:
+            - `gh api repos/OWNER/REPO/git/commits/SHA` — check if a commit is reachable
+            - `gh pr list --repo OWNER/REPO --state all --search "keyword"` — find related PRs
+            - `gh api repos/OWNER/REPO/branches/BRANCH_NAME` — check if a branch exists
+            Report what you find (e.g., "branch was force-pushed", "commit exists but branch was deleted", "PR was merged — update to released version").
           - If CI checks are still pending (timed out waiting): note in the summary as advisory (e.g., "**CI**: ⏳ N checks still running"). Do not block the review for pending checks.
           - If all CI checks pass: omit the **CI** line from the summary entirely.
           - If CI status is unavailable: omit the **CI** line from the summary.
@@ -926,7 +931,7 @@ jobs:
 
           **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]. If no Linear issue is found, use "Not specified" instead of the link.
 
-          **CI**: [If CI_FAILING is true: "❌ N check(s) failing — see details below" and list failed checks. If checks still pending: "⏳ N check(s) still running". If all pass or CI unavailable: omit this line entirely.]
+          **CI**: [If CI_FAILING is true: "❌ N check(s) failing:" followed by a bulleted list preserving the markdown hyperlinks from CI_STATUS (e.g., "- [check-name](run-url): conclusion (time ago)"). Follow with 1-2 sentences of root cause analysis from your CI log investigation. If checks still pending: "⏳ N check(s) still running". If all pass or CI unavailable: omit this line entirely.]
 
           **Re-review**: [If PREVIOUS_REVIEW_COUNT > 0: "Re-review #(PREVIOUS_REVIEW_COUNT + 1). X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
 
