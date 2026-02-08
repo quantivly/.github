@@ -39,7 +39,7 @@ jobs:
        github.event.comment.user.type != 'Bot')
 
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Validate commenter permissions
@@ -476,6 +476,214 @@ jobs:
             core.setOutput('comment_id', comment.id);
             console.log(`Posted progress comment ${comment.id}`);
 
+      - name: Fetch CI status
+        id: ci-status
+        if: steps.validate.outputs.result != 'false' && steps.staleness.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        env:
+          PROGRESS_COMMENT_ID: ${{ steps.progress.outputs.comment_id }}
+          MODEL_TIER: ${{ steps.complexity.outputs.model_tier }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            const MAX_CI_WAIT_MS = 300000; // 5 minutes
+            const POLL_INTERVAL_MS = 20000; // 20 seconds
+            const SELF_CHECK_NAME = 'Claude PR Review';
+
+            const repo = context.repo;
+            const prNumber = context.issue.number;
+            const commentId = process.env.PROGRESS_COMMENT_ID;
+            const modelTier = process.env.MODEL_TIER || 'sonnet';
+
+            // Get PR head SHA
+            const { data: pr } = await github.rest.pulls.get({
+              owner: repo.owner,
+              repo: repo.repo,
+              pull_number: prNumber,
+            });
+            let headSha = pr.head.sha;
+            console.log(`PR head SHA: ${headSha}`);
+
+            // Helper: format relative time (e.g., "2h ago", "5m ago")
+            function relativeTime(dateStr) {
+              const diffMs = Date.now() - new Date(dateStr).getTime();
+              const mins = Math.floor(diffMs / 60000);
+              if (mins < 60) return `${mins}m ago`;
+              const hours = Math.floor(mins / 60);
+              if (hours < 24) return `${hours}h ago`;
+              return `${Math.floor(hours / 24)}d ago`;
+            }
+
+            // Helper: fetch all check runs for a SHA, filtering out self
+            async function fetchCheckRuns(sha) {
+              const checkRuns = await github.paginate(
+                github.rest.checks.listForRef,
+                { owner: repo.owner, repo: repo.repo, ref: sha, per_page: 100 },
+                (response) => response.data.check_runs
+              );
+              return checkRuns.filter(cr => cr.name !== SELF_CHECK_NAME);
+            }
+
+            // Helper: categorize check runs
+            function categorize(checkRuns) {
+              const failed = [];
+              const passed = [];
+              const pending = [];
+              for (const cr of checkRuns) {
+                if (cr.status === 'completed') {
+                  if (cr.conclusion === 'success' || cr.conclusion === 'skipped' || cr.conclusion === 'neutral') {
+                    passed.push(cr);
+                  } else {
+                    failed.push(cr);
+                  }
+                } else {
+                  pending.push(cr);
+                }
+              }
+              return { failed, passed, pending };
+            }
+
+            // Helper: update progress comment (non-blocking)
+            async function updateProgress(body) {
+              if (!commentId) return;
+              try {
+                await github.rest.issues.updateComment({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  comment_id: commentId,
+                  body,
+                });
+              } catch (e) {
+                console.log(`Progress comment update failed (non-blocking): ${e.message}`);
+              }
+            }
+
+            // Phase A: Initial check
+            let checkRuns = await fetchCheckRuns(headSha);
+            let { failed, passed, pending } = categorize(checkRuns);
+            console.log(`Initial CI status: ${failed.length} failed, ${passed.length} passed, ${pending.length} pending`);
+
+            // Phase B: Wait for pending checks (if any)
+            if (pending.length > 0) {
+              const tierInfo = {
+                haiku: { name: 'Haiku 4.5' },
+                sonnet: { name: 'Sonnet 4.5' },
+                opus: { name: 'Opus 4.6' },
+              };
+              const modelName = (tierInfo[modelTier] || tierInfo.sonnet).name;
+
+              await updateProgress(
+                `🤖 **Claude review started...** Using ${modelName} (standard code review).\n\n` +
+                `⏳ Waiting for CI checks to complete (${pending.length} running)...\n` +
+                `_Review will begin once CI finishes (max wait: 5 minutes)._`
+              );
+
+              const startTime = Date.now();
+              let lastProgressUpdate = startTime;
+
+              while (pending.length > 0 && (Date.now() - startTime) < MAX_CI_WAIT_MS) {
+                await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+
+                // Re-fetch PR to check if head SHA changed (new commit pushed)
+                const { data: currentPr } = await github.rest.pulls.get({
+                  owner: repo.owner,
+                  repo: repo.repo,
+                  pull_number: prNumber,
+                });
+                if (currentPr.head.sha !== headSha) {
+                  console.log(`Head SHA changed during wait (${headSha} → ${currentPr.head.sha}) — aborting CI wait`);
+                  headSha = currentPr.head.sha;
+                  break;
+                }
+
+                // Re-fetch check runs
+                checkRuns = await fetchCheckRuns(headSha);
+                ({ failed, passed, pending } = categorize(checkRuns));
+
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                console.log(`CI poll (${elapsed}s): ${failed.length} failed, ${passed.length} passed, ${pending.length} pending`);
+
+                // Update progress comment every ~60s
+                if (Date.now() - lastProgressUpdate >= 60000) {
+                  const elapsedMin = Math.floor(elapsed / 60);
+                  const elapsedSec = elapsed % 60;
+                  await updateProgress(
+                    `🤖 **Claude review started...** Using ${modelName} (standard code review).\n\n` +
+                    `⏳ Waiting for CI checks to complete (${pending.length} still running, ${elapsedMin}m ${elapsedSec}s elapsed)...\n` +
+                    `_Review will begin once CI finishes (max wait: 5 minutes)._`
+                  );
+                  lastProgressUpdate = Date.now();
+                }
+              }
+            }
+
+            // Build final CI status string
+            const lines = [];
+            if (failed.length > 0) {
+              lines.push(`❌ Failed (${failed.length}):`);
+              for (const cr of failed.slice(0, 10)) {
+                const time = cr.completed_at ? relativeTime(cr.completed_at) : '';
+                lines.push(`  - ${cr.name}: ${cr.conclusion || 'failed'}${time ? ` (${time})` : ''}`);
+              }
+              if (failed.length > 10) {
+                lines.push(`  - ... and ${failed.length - 10} more`);
+              }
+            }
+            if (passed.length > 0) {
+              lines.push(`✅ Passed (${passed.length}):`);
+              for (const cr of passed.slice(0, 5)) {
+                lines.push(`  - ${cr.name}`);
+              }
+              if (passed.length > 5) {
+                lines.push(`  - ... and ${passed.length - 5} more`);
+              }
+            }
+            if (pending.length > 0) {
+              lines.push(`⏳ Still running — timed out waiting (${pending.length}):`);
+              for (const cr of pending.slice(0, 5)) {
+                lines.push(`  - ${cr.name}`);
+              }
+              if (pending.length > 5) {
+                lines.push(`  - ... and ${pending.length - 5} more`);
+              }
+            }
+
+            if (checkRuns.length === 0) {
+              lines.push('No CI checks found for this commit.');
+            }
+
+            let ciStatus = lines.join('\n');
+            // Cap at 2000 chars
+            if (ciStatus.length > 2000) {
+              ciStatus = ciStatus.substring(0, 1997) + '...';
+            }
+
+            const ciFailing = failed.length > 0 ? 'true' : 'false';
+            core.setOutput('ci_status', ciStatus);
+            core.setOutput('ci_failing', ciFailing);
+            console.log(`CI failing: ${ciFailing}`);
+            console.log(`CI status:\n${ciStatus}`);
+
+            // Update progress comment with CI results before handing off to Claude
+            const tierInfo2 = {
+              haiku: { name: 'Haiku 4.5', desc: 'docs/config review' },
+              sonnet: { name: 'Sonnet 4.5', desc: 'standard code review' },
+              opus: { name: 'Opus 4.6', desc: 'large/security-sensitive review' },
+            };
+            const info = tierInfo2[modelTier] || tierInfo2.sonnet;
+
+            const ciSummaryLine = failed.length > 0
+              ? `❌ CI checks complete (${failed.length} failed, ${passed.length} passed)`
+              : pending.length > 0
+                ? `⚠️ CI checks: ${passed.length} passed, ${pending.length} still running`
+                : `✅ CI checks complete (${passed.length} passed)`;
+
+            await updateProgress(
+              `🤖 **Claude review in progress...** Using ${info.name} (${info.desc}).\n\n` +
+              `${ciSummaryLine}\n` +
+              `⏳ Analyzing code changes...`
+            );
+
       - name: Build review configuration
         id: review-config
         if: steps.validate.outputs.result != 'false' && steps.staleness.outputs.skip != 'true'
@@ -603,9 +811,9 @@ jobs:
           - Each comment body may contain at most one suggestion block
 
           Choose event based on findings:
-          - `REQUEST_CHANGES`: Has CRITICAL issues
+          - `REQUEST_CHANGES`: Has CRITICAL issues OR CI_FAILING is true
           - `COMMENT`: Has HIGH issues or needs clarification
-          - `APPROVE`: Only suggestions, no blockers
+          - `APPROVE`: Only suggestions, no blockers, AND CI is not failing
 
           ---
 
@@ -678,6 +886,15 @@ jobs:
 
           If uncertain about a finding, move it to the summary body rather than keeping it as an inline comment.
 
+          ## CI Status Awareness
+
+          CI check results are provided in the PR Context below (CI_STATUS and CI_FAILING fields).
+
+          - If CI_FAILING is `true`: use `REQUEST_CHANGES` as the review event. Report the CI failure prominently in the review body (not as an inline comment) — CI failures are a build/integration issue, not a code-line issue. Mention which checks failed and when. Still include any code-level findings as inline comments.
+          - If CI checks are still pending (timed out waiting): note in the summary as advisory (e.g., "**CI**: ⏳ N checks still running"). Do not block the review for pending checks.
+          - If all CI checks pass: omit the **CI** line from the summary entirely.
+          - If CI status is unavailable: omit the **CI** line from the summary.
+
           ## Output Format
 
           Your review summary (the `body` parameter) must be under 250 words. Use inline comments for code-specific details — the body is only for the structured summary below:
@@ -690,6 +907,8 @@ jobs:
           > **Large PR** — ... [only if DIFF_LINES > 500, see Constraints above]
 
           **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]. If no Linear issue is found, use "Not specified" instead of the link.
+
+          **CI**: [If CI_FAILING is true: "❌ N check(s) failing — see details below" and list failed checks. If checks still pending: "⏳ N check(s) still running". If all pass or CI unavailable: omit this line entirely.]
 
           **Re-review**: [If PREVIOUS_REVIEW_COUNT > 0: "Re-review #(PREVIOUS_REVIEW_COUNT + 1). X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
 
@@ -774,6 +993,10 @@ jobs:
           COMMENT_CAP: ${{ steps.complexity.outputs.comment_cap }}
           COMMENTER: @${{ github.event.comment.user.login }}
           LOGS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          CI_STATUS:
+          ${{ steps.ci-status.outputs.ci_status || 'CI status unavailable' }}
+          CI_FAILING: ${{ steps.ci-status.outputs.ci_failing || 'unknown' }}
 
           ### Previous Review Context
 

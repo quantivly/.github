@@ -244,6 +244,7 @@ See [Deploying Claude Review](docs/deploying-claude-review.md) for setup guide.
 - **Security escalation**: Small changes to auth-related files automatically escalate to Opus
 - **Adaptive comment caps**: Scales with diff size (min 3, max 12 for Sonnet, max 18 for Opus)
 - **PR size advisory**: Reviews on 500+ line PRs include advisory about optimal PR size
+- **CI status awareness**: Waits for pending CI checks (up to 5 min), blocks APPROVE when checks are failing
 - **Context-aware re-reviews**: Reads previous findings, skips stale re-reviews on unchanged commits (`@claude force` to bypass)
 - **Linear validation**: Fetches issue requirements and validates alignment
 - **Custom focus**: `@claude focus on security` prioritizes specific areas
