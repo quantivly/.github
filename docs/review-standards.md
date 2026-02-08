@@ -226,7 +226,7 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 
 **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
 
-**CI**: [If checks failing: "N check(s) failing:" + bulleted list of `[❌ \`name\`](url) (time ago)` + blockquote `> **Root cause**: ...` summary. If pending: "⏳ N check(s) still running". If all pass or unavailable: omit.]
+**CI**: [If checks failing: bulleted list of `[❌ \`name\`](url) (time ago)` + blockquote `> **Root cause**: ...` summary (no count line). For multiple failures, note whether they share a root cause or are independent. If pending: "⏳ N check(s) still running". If all pass or unavailable: omit.]
 
 **Re-review**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
@@ -277,7 +277,7 @@ The review workflow automatically fetches CI check run status for the PR's head 
 
 ### Implementation
 
-The workflow waits up to 5 minutes for pending CI checks to complete before starting the review. The review workflow's own check run (`Claude PR Review`) is excluded from CI status to avoid self-referencing. Failed checks include relative timestamps (e.g., "2h ago") to help assess staleness. Failed check names use `[❌ \`name\`](url)` format for scannable, clickable links. Root cause analysis is formatted as a blockquote (`> **Root cause**: ...`) to visually separate structured check data from narrative analysis.
+The workflow waits up to 5 minutes for pending CI checks to complete before starting the review. The review workflow's own check run (`Claude PR Review`) is excluded from CI status to avoid self-referencing. Failed checks include relative timestamps (e.g., "2h ago") to help assess staleness. Failed check names use `[❌ \`name\`](url)` format for scannable, clickable links. Root cause analysis is formatted as a blockquote (`> **Root cause**: ...`) to visually separate structured check data from narrative analysis. No count line is included — the bulleted list is self-explanatory. For multiple failures, the root cause notes whether they share a common cause or are independent issues.
 
 ### Cross-Repo Investigation
 
@@ -492,6 +492,7 @@ This document should evolve based on:
 
 ## Changelog
 
+- **2026-02-08**: Drop redundant count line from CI section; for multiple failures, root cause notes whether issues are related or independent
 - **2026-02-08**: CI failure section uses blockquote root cause format and cleaner `[❌ \`name\`](url)` check links; CI_STATUS input cleaned of redundant noise
 - **2026-02-08**: CI reviews now hyperlink failed check names to run URLs and investigate cross-repo dependency failures
 - **2026-02-08**: Added CI Status section — reviews now check CI health and block APPROVE when checks are failing
