@@ -9,7 +9,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned<br>\n*Implements export with date filtering as specified.*\n\n✅ **Highlights**\n- Good use of streaming response for large datasets\n- Proper Celery task for async generation\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned<br>\nImplements export with date filtering as specified.\n\n✅ **Highlights**\n- Good use of streaming response for large datasets\n- Proper Celery task for async generation\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/export/views.py",
@@ -38,7 +38,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — ⚠️ Gaps<br>\n*Issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure.*\n\n✅ **Highlights**\n- Proper use of database transaction for atomic bulk update\n- Dry-run mode for safe testing\n\n🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — ⚠️ Gaps<br>\nIssue doesn't mention logging, but HIPAA requires audit trail without PHI exposure.\n\n✅ **Highlights**\n- Proper use of database transaction for atomic bulk update\n- Dry-run mode for safe testing\n\n🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
