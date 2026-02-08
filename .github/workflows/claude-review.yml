@@ -880,7 +880,7 @@ jobs:
           5. Flag any gaps between requirements and implementation
 
           If Linear MCP tools are unavailable (connection error, timeout, tool not found), report in the summary:
-          **Linear**: ⚠️ MCP unavailable — could not connect to Linear
+          <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="18"> ⚠️ MCP unavailable — could not connect to Linear
           Do NOT say "Not found" if the tools failed to connect — distinguish between "issue doesn't exist" and "couldn't reach Linear".
 
           ## Before Submitting
@@ -920,7 +920,7 @@ jobs:
           > [!NOTE]
           > **Large PR** — ... [only if DIFF_LINES > 500, see Constraints above]
 
-          **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]. If no Linear issue is found, use "Not specified" instead of the link.
+          <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="18"> [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]. If no Linear issue is found, use "Not specified" instead of the link.
 
           **CI**: [If CI_FAILING is true, use this exact structure:]
           - [❌ check-name](run-url) (time ago)
@@ -930,13 +930,13 @@ jobs:
           [Do NOT include a "N check(s) failing" count line — the bulleted list is self-explanatory.]
           [If checks still pending: "**CI**: ⏳ N check(s) still running — review proceeds without CI signal." If all pass or CI unavailable: omit the **CI** line entirely.]
 
-          **Re-review**: [If PREVIOUS_REVIEW_COUNT > 0: "Re-review #(PREVIOUS_REVIEW_COUNT + 1). X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
+          [If PREVIOUS_REVIEW_COUNT > 0: "🔄 **Re-review #(PREVIOUS_REVIEW_COUNT + 1)** — X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
 
           **Highlights**:
           - ✅ [Notable good practice]
           - ✅ [Another positive]
 
-          **Issues**: 🚨 X · ⚠️ Y · 💡 Z — see inline comments
+          🚨 X · ⚠️ Y · 💡 Z — see inline comments
 
           [If any findings were omitted because they exceeded the inline comment cap, add a collapsible block:]
           <details>
