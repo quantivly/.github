@@ -110,7 +110,7 @@ The workflow automatically selects the Claude model based on PR complexity:
 | Standard code changes (<500 lines) | Sonnet 4.5 | ~$0.60-0.90 |
 | Large diffs (>500 lines) or security-sensitive paths | Opus 4.6 | ~$2.00-3.00 |
 
-Security-sensitive paths are detected by filename patterns: `auth`, `security`, `login`, `password`, `token`, `session`, `permission`, `access`, `crypto`, `encrypt`, `hipaa`, `phi`.
+Security-sensitive paths are detected by filename patterns: `auth`, `security`, `login`, `password`, `token`, `session`, `permission`, `crypto`, `encrypt`, `hipaa`, `phi`, `middleware`, `migration`, `webhook`, `oauth`, `saml`, `keycloak`, `audit`, `secret`, `credential`.
 
 ### Concurrency
 

@@ -1,7 +1,7 @@
 # Claude + GitHub Integration Guide
 
 **Version**: 1.0
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-07
 
 ---
 
@@ -146,14 +146,16 @@ Claude checks for:
 - **HIPAA compliance** considerations (PHI handling, audit logs, access controls)
 - **Dependency vulnerabilities** (known CVEs)
 
-**Example Critical Finding**:
+**Example Critical Finding** (inline comment on PR diff):
 ```
-**[Security]**: SQL Injection vulnerability in export query
-   - **Location**: `views/export.py:45-52`
-   - **Finding**: User input directly interpolated into SQL query
-   - **Risk**: Attacker could extract entire database
-   - **Fix**: Use parameterized queries with Django ORM or `cursor.execute()` with placeholders
-   - **Severity**: CRITICAL
+🚨 **SQL injection in export query**
+
+User input is directly interpolated into the SQL query via f-string.
+An attacker could extract the entire database.
+
+```suggestion
+cursor.execute('SELECT * FROM studies WHERE date >= %s', (start_date,))
+```
 ```
 
 ### 2. Logic Errors and Bugs
@@ -166,14 +168,16 @@ Claude identifies:
 - **Error handling** gaps
 - **Data consistency** issues
 
-**Example Finding**:
+**Example Finding** (inline comment on PR diff):
 ```
-**[Logic]**: Off-by-one error in pagination
-   - **Location**: `api/pagination.py:78`
-   - **Finding**: `range(0, total_pages)` should be `range(0, total_pages + 1)`
-   - **Risk**: Last page of results never returned
-   - **Fix**: Adjust range to be inclusive of final page
-   - **Severity**: HIGH
+⚠️ **Off-by-one error in pagination**
+
+`range(0, total_pages)` excludes the last page — users will never see
+the final page of results.
+
+```suggestion
+for page in range(0, total_pages + 1):
+```
 ```
 
 ### 3. Code Quality and Maintainability
@@ -195,13 +199,13 @@ Claude assesses:
 - **Test quality** - Proper assertions, appropriate mocking
 - **Framework conventions** - pytest/Jest best practices
 
-**Example Suggestion**:
+**Example Suggestion** (inline comment on PR diff):
 ```
-**[Testing]**: Missing edge case tests for empty dataset
-   - **Location**: `tests/test_export.py`
-   - **Current**: Only tests with valid data
-   - **Suggested**: Add test for `export_to_csv([])` (empty list)
-   - **Benefit**: Prevents errors when no data to export
+💡 **Missing edge case test for empty dataset**
+
+The test suite only covers the happy path with valid data. Consider
+adding a test for `export_to_csv([])` to verify the empty dataset
+behavior (should return 204 No Content or an empty CSV with headers).
 ```
 
 ### 5. Performance
@@ -540,5 +544,5 @@ This gives you Linear context while writing code, not just during PR review.
 
 ---
 
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-07
 **Maintained by**: Engineering Team
