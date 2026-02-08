@@ -201,323 +201,78 @@ git push origin master
 
 ## Claude + GitHub Integration
 
-Quantivly uses automated Claude-powered code reviews for pull requests. This section describes how the integration works and best practices for developers.
+Quantivly uses automated Claude-powered code reviews for pull requests. For complete details, see the linked documentation below.
 
 ### Two Claude Review Systems
 
-Quantivly has two complementary Claude review systems that use the same [review standards](docs/review-standards.md):
+| | GitHub Actions (`@claude`) | Local CLI (`review-pr` skill) |
+|---|---|---|
+| **Purpose** | Formal PR validation before merge | Interactive development and feature planning |
+| **Trigger** | Comment `@claude` on any open PR | Ask Claude to "review PR" in CLI session |
+| **Posting** | Automatic | User approval required |
+| **Cost** | Organization-paid (~$0.10-3.00) | Developer-paid (Claude Pro/Team subscription) |
+| **Use When** | PR is ready for formal review | During development for early feedback |
 
-#### GitHub Actions (`@claude` comment)
-- **Purpose**: Formal PR validation before merge
-- **Trigger**: Comment `@claude` on any open PR
-- **Posting**: Automatic (posts review directly to PR)
-- **Cost**: Organization-paid (~$0.60-0.90 per review)
-- **Optimizations**: Prompt caching, retry logic, token metrics
-- **Use When**: PR is ready for formal review before requesting human review
+**Both systems** reference the same [review standards](docs/review-standards.md). Changes to review standards should be reflected in both.
 
-#### Local CLI (`review-pr` skill)
-- **Purpose**: Interactive development and feature planning
-- **Trigger**: Ask Claude to "review PR" in CLI session
-- **Posting**: User approval required before posting
-- **Cost**: Developer-paid (Claude Pro/Team subscription)
-- **Flexibility**: User control, interactive troubleshooting, iterative refinement
-- **Use When**: During development for early feedback or exploring design options
+### Quick Start
 
-**Both systems** reference the same review standards but are optimized for different contexts. Changes to review standards should be reflected in both.
+1. Create PR with Linear ID in title: `HUB-1234 Add CSV export feature`
+2. Comment `@claude` on the PR (optionally add focus: `@claude focus on security`)
+3. Wait for review (Haiku: ~1-2 min, Sonnet: ~2-4 min, Opus: ~3-7 min)
+4. Fix CRITICAL/HIGH issues, then request human review
 
-### Overview
+See [Integration Guide](docs/claude-integration-guide.md) for complete usage details.
 
-**What**: Automated code reviews using Claude (Anthropic's AI) triggered by PR comments
+### Architecture
 
-**Why**: Catch security vulnerabilities, logic errors, and code quality issues before human review
-
-**When**: Manually triggered by commenting `@claude` on any open pull request
-
-**Who**: Available to organization members and repository collaborators with write access
-
-**Identity**: Reviews are posted by "Claude[bot]" (custom GitHub App) with formal review events
-
-**Features**:
-- **Inline comments**: Feedback attached directly to specific lines in the diff
-- **Formal reviews**: Proper APPROVE/REQUEST_CHANGES/COMMENT events (not just comments)
-- **Cross-repo context**: Can fetch code from related Quantivly repositories
-- **Context-aware re-reviews**: Reads previous review findings, avoids repeating addressed feedback, focuses on new/changed code
-
-### How to Use
-
-1. **Create PR with Linear ID in title**:
-   ```
-   HUB-1234 Add CSV export feature
-   ```
-
-2. **Comment on PR to trigger review** (any comment mentioning `@claude`):
-   ```
-   @claude
-   ```
-   ```
-   @claude review
-   ```
-   ```
-   Hey @claude, can you review this?
-   ```
-
-3. **Optionally include custom instructions** for focused reviews:
-   ```
-   @claude focus on security and HIPAA compliance
-   ```
-   ```
-   @claude this is a performance-critical path, please check for N+1 queries
-   ```
-   ```
-   @claude please pay attention to the error handling in the retry logic
-   ```
-   Custom instructions are included in Claude's prompt and prioritized during review.
-
-4. **Wait for review to complete** (Haiku: ~1-2 min, Sonnet: ~2-4 min, Opus: ~3-7 min)
-
-5. **Address feedback**:
-   - Fix **CRITICAL** issues (security, data loss)
-   - Fix **HIGH** issues (bugs, logic errors)
-   - Consider **Suggestions** (use judgment)
-
-6. **Request human review** after addressing critical feedback
-
-### What Claude Reviews
-
-**Priority order**:
-1. **Security** - OWASP Top 10, HIPAA compliance, SQL injection, XSS, credentials
-2. **Logic Errors** - Incorrect implementations, edge cases, race conditions
-3. **Code Quality** - Readability, complexity, DRY, SOLID, conventions
-4. **Testing** - Coverage, edge cases, test quality, framework conventions
-5. **Performance** - Algorithmic efficiency, N+1 queries, memory leaks, caching
-
-### Linear Integration
-
-When PR title includes Linear issue ID (format: `AAA-####`), Claude:
-- Fetches issue description and acceptance criteria
-- Validates PR alignment with requirements
-- References specific issue requirements in feedback
-- Provides context-aware suggestions
-
-**Note**: GitHub-Linear integration automatically notifies Linear issue when review is posted.
-
-### GitHub MCP Integration (Cross-Repository Context)
-
-Claude can fetch code from related repositories when reviewing PRs. This enables validation that changes work correctly in their consuming context.
-
-**When enabled**, Claude can:
-- Read files from other Quantivly repositories (e.g., check how `sre-ui` consumes `sre-core` APIs)
-- Search for code patterns across the organization
-- Validate that API contracts are maintained across repositories
-
-**Quantivly repository architecture**:
-
-Two-layer architecture: platform provides the foundational data infrastructure, hub provides the user-facing analytics portal on top.
-
-**platform** ([`quantivly-dockers`](https://github.com/quantivly/quantivly-dockers)) - Core DICOM/RIS data backbone
-The foundational layer that ingests, processes, and stores medical imaging data:
-| Component | Role | Key Dependencies |
-|-----------|------|------------------|
-| `box` | DICOM harmonization (GE/Philips/Siemens), RIS integration | `quantivly-sdk` |
-| `ptbi` | DICOM networking (Python+Java/dcm4che) | `quantivly-sdk` |
-| `auto-conf` | Jinja2 stack generator (configures both platform AND hub deployments) | — |
-| `quantivly-sdk` | Python SDK for platform services | — |
-
-**hub** ([`hub`](https://github.com/quantivly/hub)) - Healthcare analytics portal (builds on platform)
-User-facing application providing analytics, recommendations, and plugins:
-| Repository | Role | Key Dependencies |
-|------------|------|------------------|
-| `sre-core` | Django backend (GraphQL API, plugin system) | `sre-sdk` |
-| `sre-ui` | Next.js frontend | `sre-core` GraphQL |
-| `sre-event-bridge` | WAMP→REST bridge (connects to platform's WAMP router) | `sre-sdk` |
-| `sre-postgres` | PostgreSQL database | — |
-| `sre-sdk` | Python SDK for hub services | — |
-
-**How they connect**: In production, hub integrates with platform's backbone services. Platform's `auto-conf` generates deployment configs for both ecosystems (`auto-conf/modules/quantivly/sre/` for hub). Hub can run standalone for development but production deployments use platform's infrastructure (Keycloak, WAMP router, shared networking).
-
-**When to expect cross-repo validation**:
-- `sre-core` GraphQL changes → check `sre-ui` queries/types
-- `sre-sdk` changes → check `sre-core`, `sre-event-bridge`
-- `quantivly-sdk` changes → check `box`, `ptbi`
-- `auto-conf` template changes → verify rendered stack files
-
-**Configuration**: Requires `GH_MCP_TOKEN` organization secret (falls back to `GITHUB_TOKEN` if not set). Note: GitHub reserves the `GITHUB_` prefix for secrets, so we use `GH_` instead.
-
-### Best Practices
-
-1. **Review BEFORE human review** - Catch issues early, save reviewer time
-2. **Address CRITICAL first** - Security and data loss issues must be fixed
-3. **Re-review after significant changes** - Comment `@claude` again if substantial fixes made
-4. **Don't ignore security findings** - Healthcare data requires extra caution
-5. **Use for learning** - Claude explains WHY, not just WHAT
-
-### Tool Allocation
-
-Quantivly uses multiple code quality tools. Here's what each tool owns:
-
-#### Pre-Commit Hooks (Local, Before Push)
-
-Run: `pre-commit run --all-files`
-
-**Responsibilities**:
-- **ruff**: Linting, import sorting, basic security patterns (S101-S603)
-- **ruff-format** or **black**: Code formatting (PEP 8)
-- **mypy**: Type hint completeness and correctness
-
-**When to run**: Before every commit (automatic if configured)
-
-#### Claude Code Review (GitHub Actions, @claude)
-
-Trigger: Comment `@claude` on PR
-
-**Responsibilities**:
-- **Security**: OWASP Top 10, SQL injection, XSS, credentials, authentication
-- **Logic Errors**: Correctness, edge cases, off-by-one, race conditions
-- **Code Quality**: Design patterns, SOLID, maintainability, complexity
-- **Testing**: Coverage adequacy, edge case testing, test quality
-- **Performance**: N+1 queries, algorithmic efficiency, caching opportunities
-- **Linear Alignment**: PR vs. issue requirements validation
-
-**When to run**: After PR creation, before requesting human review
-
-#### CI/CD Pipeline (pytest, coverage)
-
-Run: Automatically on PR push
-
-**Responsibilities**:
-- **Unit Tests**: Individual function correctness
-- **Integration Tests**: Component interaction
-- **Coverage**: Threshold enforcement (80%+ for critical paths)
-
-**Result**: Blocking if tests fail or coverage drops
-
-#### Decision Matrix: When to Use Each
-
-| Scenario | Tool |
-|----------|------|
-| "I'm about to commit changes" | Pre-commit hooks |
-| "I want feedback during feature development" | Local Claude Code CLI (`claude` command) |
-| "PR is ready for formal review" | GitHub Actions (`@claude` comment) |
-| "I need to verify tests pass" | CI/CD pipeline (automatic) |
-| "I want to explore Linear issue context" | Local Claude Code CLI with Linear MCP |
-
-### Implementation Details
-
-**Architecture**: Reusable workflow pattern using official GitHub Action
 - **Central workflow**: `quantivly/.github/.github/workflows/claude-review.yml`
-- **Caller workflows**: Minimal files in each repository's `.github/workflows/` directory
-- **Secrets**: Automatically inherited from organization secrets using `secrets: inherit`
-- **Action**: [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) (pinned to specific commit SHA for supply chain security)
-- **Deployment**: See [Deploying Claude Review](docs/deploying-claude-review.md)
+- **Caller workflows**: Minimal files in each repository's `.github/workflows/` directory (see [template](workflow-templates/claude-review-caller.yml))
+- **Secrets**: Inherited from organization secrets via `secrets: inherit`
+- **Action**: [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) (SHA-pinned for supply chain security)
+- **Identity**: Custom GitHub App "Claude" (posts as "Claude[bot]", falls back to "github-actions[bot]")
+- **MCP**: Linear MCP for issue context and requirements validation
 
-**GitHub App "Claude"**: Custom identity for reviews
-- **Name**: Claude (appears as "Claude[bot]")
-- **Purpose**: Reviews appear as distinct identity, not "github-actions[bot]"
-- **Permissions**: Contents (Read), Issues (Write), Pull requests (Write)
-- **Configuration**: `CLAUDE_APP_ID` (org variable), `CLAUDE_APP_PRIVATE_KEY` (org secret)
-- **Fallback**: If App token unavailable, falls back to `GITHUB_TOKEN` (github-actions[bot])
+See [Deploying Claude Review](docs/deploying-claude-review.md) for setup guide.
 
-**Workflow**: `.github/workflows/claude-review.yml`
-- Triggers on `issue_comment` event with `@claude` pattern (direct) or `workflow_call` (reusable)
-- Validates commenter permissions (org member or collaborator)
-- Generates GitHub App token for posting as Claude[bot]
-- Uses `anthropics/claude-code-action` (SHA-pinned) with built-in MCP servers
+### Key Features
 
-**MCP Servers**:
-- Linear MCP (via `.mcp.json`) - Issue context and requirements validation
-
-**Features**:
-- **Formal reviews**: Submits review events via `gh api` (APPROVE/REQUEST_CHANGES/COMMENT)
-- **Inline review comments**: Submitted as part of the review via GitHub Reviews API `comments` array. Uses GitHub suggestion blocks (`` ```suggestion ``) for direct line replacements, enabling one-click "Apply suggestion" or batch-commit of multiple suggestions. Falls back to regular code blocks when the fix involves changes elsewhere or structural modifications.
-- **Adaptive model selection**: Haiku for docs/config, Sonnet for standard code, Opus for large/security-sensitive PRs
-- **Adaptive comment caps**: Inline comment limit scales with diff size (min 3, max 12)
-- **Progress tracking**: Real-time tracking comment showing model tier and expected duration (auto-deleted after completion)
-- **Cost alerting**: Reviews exceeding $5 trigger a comment suggesting PR size reduction
-- **Cache metrics**: Token cache read/creation rates tracked in step summary for cost optimization
-- **Linear MCP integration**: Validates PR against issue requirements
-- **Custom reviewer instructions**: Extracted from `@claude` comments (wrapped in XML delimiters for safety)
-- **Few-shot review examples**: Concrete examples guide review calibration and output format
-- **Quality feedback**: Reaction prompt (👍/👎) in review footer for tracking review helpfulness
-
-**Cost**: ~$0.10-$3.00 per review depending on PR complexity (covered by organization)
-
-**Security**: All API keys stored in organization secrets, passed via environment variables
-
-**Deploying to New Repositories**:
-
-To enable Claude reviews in a repository, add this minimal caller workflow:
-
-```bash
-# Copy template to repository
-cp ~/quantivly/.github/workflow-templates/claude-review-caller.yml \
-   <repo>/.github/workflows/claude-review.yml
-
-# Commit and push
-git add .github/workflows/claude-review.yml
-git commit -m "enh: Add Claude-powered PR review workflow"
-git push origin master
-```
-
-See [docs/deploying-claude-review.md](docs/deploying-claude-review.md) for complete deployment guide.
-
-### Local Development with MCP
-
-Developers can optionally use Claude Code CLI with Linear MCP integration for feature implementation:
-
-```bash
-# Configure Linear MCP using Claude CLI (recommended)
-claude mcp add --transport http linear-server https://mcp.linear.app/mcp
-
-# OR manually add to ~/.config/claude/mcp.json:
-# {
-#   "mcpServers": {
-#     "linear-server": {
-#       "url": "https://mcp.linear.app/mcp",
-#       "transport": "http",
-#       "authorization": {
-#         "type": "bearer",
-#         "token": "YOUR_LINEAR_API_KEY"
-#       }
-#     }
-#   }
-# }
-
-# Use Claude Code with Linear context
-cd ~/hub/sre-core
-claude
-> "Implement feature from HUB-1234"
-```
+- **Formal reviews**: APPROVE/REQUEST_CHANGES/COMMENT review events with inline comments
+- **Suggestion blocks**: One-click "Apply suggestion" for direct line replacements
+- **Adaptive model selection**: Haiku (docs/config), Sonnet (standard code), Opus (large/security-sensitive PRs)
+- **Security escalation**: Small changes to auth-related files automatically escalate to Opus
+- **Adaptive comment caps**: Scales with diff size (min 3, max 12 for Sonnet, max 18 for Opus)
+- **PR size advisory**: Reviews on 500+ line PRs include advisory about optimal PR size
+- **Context-aware re-reviews**: Reads previous findings, skips stale re-reviews on unchanged commits
+- **Linear validation**: Fetches issue requirements and validates alignment
+- **Custom focus**: `@claude focus on security` prioritizes specific areas
+- **Cost alerting**: Reviews exceeding $5 suggest PR size reduction
+- **Quality feedback**: 👍/👎 reactions in review footer
 
 ### Troubleshooting
 
-**Review not triggering**:
-- Check comment contains `@claude` anywhere in the text
-- Verify you're an org member or collaborator
-- Check PR is open (not draft or closed)
+**Review not triggering**: Check comment contains `@claude`, verify org membership, check PR is open (not draft/closed).
 
-**Review failed**:
-- Check [Actions tab](https://github.com/quantivly/<repo>/actions) for logs
-- Common causes: API rate limits, timeouts
-- Solution: Wait and retry with `@claude`
+**Review failed**: Check [Actions tab](https://github.com/quantivly/<repo>/actions) for logs. Common causes: API rate limits, timeouts. Retry with `@claude`.
 
-**Linear context missing**:
-- Verify PR title starts with `AAA-####` format
-- Check issue exists and is accessible in Linear
-- Review continues without Linear context if not found
+**Linear context missing**: Verify PR title starts with `AAA-####` format and issue exists in Linear.
 
-**Inline comments appear as file-level**:
-- GitHub's Reviews API returns `line: null` in GET responses even when comments are correctly positioned on diff lines — this is normal
-- Always verify comment positioning in the PR page UI, not from API responses
-- If comments truly aren't positioned, check that the `line` value in the submitted JSON is an integer within a diff hunk range
+**Inline comments appear as file-level**: GitHub's Reviews API returns `line: null` in GET responses even when comments are correctly positioned — always verify in the PR page UI.
 
-### Related Documentation
+### Review Prompt Editing
 
-- [Detailed Integration Guide](docs/claude-integration-guide.md) - Complete usage guide
-- [Review Standards](docs/review-standards.md) - Severity definitions, checklists, and quality criteria
+The `prompt:` field in `claude-review.yml` is the most frequently edited part of this repo:
+- Use concrete examples in JSON templates (e.g., `"line": 42`) — LLMs produce better output with realistic examples
+- Avoid emphatic/scary constraint language — use factual, concise guidance instead
+- Static instructions go first (cacheable), dynamic PR context goes last
+- Test on a real PR after pushing (trigger with `@claude`) and verify results in the PR page UI
+
+### Documentation
+
+- [Integration Guide](docs/claude-integration-guide.md) - Complete usage guide for developers
+- [Review Standards](docs/review-standards.md) - Severity definitions, checklists, quality criteria, tool allocation
 - [Review Examples](docs/review-examples.md) - Concrete examples of well-calibrated reviews
 - [Deploying Claude Review](docs/deploying-claude-review.md) - Setup guide for new repositories
-- [GitHub Actions Docs](https://docs.github.com/en/actions) - Workflow reference
-- [Linear API](https://developers.linear.app/) - API documentation
 
 ## Development Standards
 
@@ -585,11 +340,6 @@ claude
 7. **Branch Protection**: `master` branch should have protection rules requiring review for profile changes.
 
 8. **Marketing Coordination**: Profile README changes should be coordinated with marketing team to ensure consistent messaging.
-
-9. **Review Prompt Editing**: The `prompt:` field in `claude-review.yml` is the most frequently edited part of this repo. When modifying it:
-   - Use concrete examples in JSON templates (e.g., `"line": 42`) instead of abstract placeholders — LLMs produce better output with realistic examples
-   - Avoid emphatic/scary constraint language (e.g., "CRITICAL — doing X causes Y") — this causes the model to take fallback paths and avoid the desired behavior entirely. Use factual, concise guidance instead.
-   - Test on a real PR after pushing (trigger with `@claude` on any open PR) and verify results in the PR page UI
 
 ## Git Workflow
 
