@@ -268,6 +268,10 @@ The `prompt:` field in `claude-review.yml` is the most frequently edited part of
 - Avoid emphatic/scary constraint language — use factual, concise guidance instead
 - Static instructions go first (cacheable), dynamic PR context goes last
 - Test on a real PR after pushing (trigger with `@claude`) and verify results in the PR page UI
+- Never nest markdown formatting inside link text (e.g., `[❌ \`name\`](url)`) — LLMs silently drop the nested content; use plain text: `[❌ name](url)`
+- Replace dense single-paragraph instructions with concrete multi-line templates using structural boundaries (blockquotes, bullet lists) — dense paragraphs produce wildly inconsistent output
+- Remove redundant data from LLM input (CI_STATUS, PR context) — if info is in a URL, don't also append it as text; noise in input leaks unpredictably into output
+- Don't ask the LLM to state what the reader can already see (e.g., count above a single bullet) — instead have it synthesize relationships or insights across visible data
 
 ### Documentation
 
