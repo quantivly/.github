@@ -899,7 +899,7 @@ jobs:
 
           CI check results are provided in the PR Context below (CI_STATUS and CI_FAILING fields).
 
-          - If CI_FAILING is `true`: use `REQUEST_CHANGES` as the review event. **Investigate the failure** before writing the review — extract the run ID from the hyperlink URL in CI_STATUS and use `gh run view <run-id> --log-failed` to fetch the failed step logs. Identify the root cause and report it using the `> **Root cause**: ...` blockquote format shown in the Output Format section. If the failure is related to the PR's changes, explain the connection. If it appears pre-existing or unrelated, note that too. Still include any code-level findings as inline comments.
+          - If CI_FAILING is `true`: use `REQUEST_CHANGES` as the review event. **Investigate the failure** before writing the review — extract the run ID from the hyperlink URL in CI_STATUS and use `gh run view <run-id> --log-failed` to fetch the failed step logs. Identify the root cause and report it using the `**Root cause**: ...` format shown in the Output Format section. If the failure is related to the PR's changes, explain the connection. If it appears pre-existing or unrelated, note that too. Still include any code-level findings as inline comments.
             When the failure involves a dependency or cross-repo reference (e.g., npm/pip failing to fetch a commit, branch, or version from another repository), go beyond the CI logs — verify the referenced resource exists:
             - `gh api repos/OWNER/REPO/git/commits/SHA` — check if a commit is reachable
             - `gh pr list --repo OWNER/REPO --state all --search "keyword"` — find related PRs
@@ -923,13 +923,13 @@ jobs:
           <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]<br>
           [1-sentence alignment reason]
 
-          Place the alignment reason on a second line (plain text) after `<br>`. Keep it to one short sentence. If no Linear issue is found, use "Not specified" instead of the link.
+          Place the alignment reason on a second line after `<br>`. Keep it to one short sentence. Do NOT use asterisks or italics. If no Linear issue is found, use "Not specified" instead of the link.
 
           **CI**
           [If CI_FAILING is true, use this exact structure:]
           - [❌ check-name](run-url) (time ago)
 
-          > **Root cause**: 1-2 sentence summary from your CI log investigation. Include what failed, why, and an actionable fix. If multiple checks are failing, note whether the failures share a root cause or are independent issues.
+          **Root cause**: 1-2 sentence summary from your CI log investigation. Include what failed, why, and an actionable fix. If multiple checks are failing, note whether the failures share a root cause or are independent issues.
 
           [Do NOT include a "N check(s) failing" count line — the bulleted list is self-explanatory.]
           [If checks still pending: "⏳ N check(s) still running — review proceeds without CI signal." If all pass or CI unavailable: omit the **CI** line entirely.]
