@@ -226,6 +226,8 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 
 **Linear**: [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
 
+**CI**: [If checks failing: "N check(s) failing:" + bulleted list of `[❌ \`name\`](url) (time ago)` + blockquote `> **Root cause**: ...` summary. If pending: "⏳ N check(s) still running". If all pass or unavailable: omit.]
+
 **Re-review**: [If re-review: "Re-review #N. X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
 **Issues**: 🚨 X · ⚠️ Y · 💡 Z — see inline comments
@@ -275,7 +277,7 @@ The review workflow automatically fetches CI check run status for the PR's head 
 
 ### Implementation
 
-The workflow waits up to 5 minutes for pending CI checks to complete before starting the review. The review workflow's own check run (`Claude PR Review`) is excluded from CI status to avoid self-referencing. Failed checks include relative timestamps (e.g., "2h ago") to help assess staleness. Failed check names are hyperlinked to their run URLs for one-click navigation to the failure details.
+The workflow waits up to 5 minutes for pending CI checks to complete before starting the review. The review workflow's own check run (`Claude PR Review`) is excluded from CI status to avoid self-referencing. Failed checks include relative timestamps (e.g., "2h ago") to help assess staleness. Failed check names use `[❌ \`name\`](url)` format for scannable, clickable links. Root cause analysis is formatted as a blockquote (`> **Root cause**: ...`) to visually separate structured check data from narrative analysis.
 
 ### Cross-Repo Investigation
 
@@ -490,6 +492,7 @@ This document should evolve based on:
 
 ## Changelog
 
+- **2026-02-08**: CI failure section uses blockquote root cause format and cleaner `[❌ \`name\`](url)` check links; CI_STATUS input cleaned of redundant noise
 - **2026-02-08**: CI reviews now hyperlink failed check names to run URLs and investigate cross-repo dependency failures
 - **2026-02-08**: Added CI Status section — reviews now check CI health and block APPROVE when checks are failing
 - **2026-02-07**: Added GitHub suggestion block guidance for inline comments, bolded short titles format, suggestion vs regular code block rules
