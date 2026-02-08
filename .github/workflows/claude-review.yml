@@ -624,7 +624,8 @@ jobs:
               lines.push(`❌ Failed (${failed.length}):`);
               for (const cr of failed.slice(0, 10)) {
                 const time = cr.completed_at ? relativeTime(cr.completed_at) : '';
-                lines.push(`  - ${cr.name}: ${cr.conclusion || 'failed'}${time ? ` (${time})` : ''}`);
+                const url = cr.html_url || '';
+                lines.push(`  - ${cr.name}: ${cr.conclusion || 'failed'}${time ? ` (${time})` : ''}${url ? ` — ${url}` : ''}`);
               }
               if (failed.length > 10) {
                 lines.push(`  - ... and ${failed.length - 10} more`);
@@ -891,7 +892,7 @@ jobs:
 
           CI check results are provided in the PR Context below (CI_STATUS and CI_FAILING fields).
 
-          - If CI_FAILING is `true`: use `REQUEST_CHANGES` as the review event. Report the CI failure prominently in the review body (not as an inline comment) — CI failures are a build/integration issue, not a code-line issue. Mention which checks failed and when. Still include any code-level findings as inline comments.
+          - If CI_FAILING is `true`: use `REQUEST_CHANGES` as the review event. **Investigate the failure** before writing the review — use `gh run view <run-id> --log-failed` (extract the run ID from the URL in CI_STATUS) to fetch the failed step logs. Identify the root cause (e.g., build error, test failure, missing dependency) and report it in the review body with actionable guidance. If the failure is related to the PR's changes, explain the connection. If it appears pre-existing or unrelated, note that too. Still include any code-level findings as inline comments.
           - If CI checks are still pending (timed out waiting): note in the summary as advisory (e.g., "**CI**: ⏳ N checks still running"). Do not block the review for pending checks.
           - If all CI checks pass: omit the **CI** line from the summary entirely.
           - If CI status is unavailable: omit the **CI** line from the summary.
