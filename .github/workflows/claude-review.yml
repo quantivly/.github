@@ -666,13 +666,23 @@ jobs:
             console.log(`CI failing: ${ciFailing}`);
             console.log(`CI status:\n${ciStatus}`);
 
+            // Escalate model from Haiku to Sonnet when CI is failing.
+            // Investigating CI logs requires stronger reasoning than docs/config review.
+            let effectiveTier = modelTier;
+            if (ciFailing === 'true' && modelTier === 'haiku') {
+              effectiveTier = 'sonnet';
+              core.setOutput('model_override', 'claude-sonnet-4-5-20250929');
+              core.setOutput('model_tier_override', 'sonnet');
+              console.log('CI failure detected — escalating model from Haiku to Sonnet for log investigation');
+            }
+
             // Update progress comment with CI results before handing off to Claude
             const tierInfo2 = {
               haiku: { name: 'Haiku 4.5', desc: 'docs/config review' },
               sonnet: { name: 'Sonnet 4.5', desc: 'standard code review' },
               opus: { name: 'Opus 4.6', desc: 'large/security-sensitive review' },
             };
-            const info = tierInfo2[modelTier] || tierInfo2.sonnet;
+            const info = tierInfo2[effectiveTier] || tierInfo2.sonnet;
 
             const ciSummaryLine = failed.length > 0
               ? `❌ CI checks complete (${failed.length} failed, ${passed.length} passed)`
@@ -692,7 +702,8 @@ jobs:
         run: |
           # Shared review configuration used by both the primary attempt and retry steps.
           # claude_args: tool allowlist, model selection, MCP config, and tier-scaled max-turns
-          MODEL_TIER="${{ steps.complexity.outputs.model_tier }}"
+          # CI status step may override model tier (e.g., Haiku → Sonnet when CI is failing)
+          MODEL_TIER="${{ steps.ci-status.outputs.model_tier_override || steps.complexity.outputs.model_tier }}"
           case "$MODEL_TIER" in
             haiku)  MAX_TURNS=8  ;;
             opus)   MAX_TURNS=20 ;;
@@ -705,7 +716,7 @@ jobs:
           {
             echo 'REVIEW_CLAUDE_ARGS<<__CLAUDE_ARGS_DELIM__'
             cat <<__ARGS_CONTENT__
-          --model ${{ steps.complexity.outputs.model }}
+          --model ${{ steps.ci-status.outputs.model_override || steps.complexity.outputs.model }}
           --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh api -X POST:*),Bash(gh api -X PATCH:*),Bash(gh api repos/:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           --max-turns ${MAX_TURNS}
           ${MCP_FLAG}
@@ -1312,7 +1323,7 @@ jobs:
           METRIC_MODEL: ${{ steps.extract-metrics.outputs.model || 'N/A' }}
           METRIC_CACHE_READ: ${{ steps.extract-metrics.outputs.cache_read || 'N/A' }}
           METRIC_CACHE_CREATION: ${{ steps.extract-metrics.outputs.cache_creation || 'N/A' }}
-          MODEL_TIER: ${{ steps.complexity.outputs.model_tier || 'N/A' }}
+          MODEL_TIER: ${{ steps.ci-status.outputs.model_tier_override || steps.complexity.outputs.model_tier || 'N/A' }}
           DIFF_LINES: ${{ steps.complexity.outputs.diff_lines || 'N/A' }}
           COMMENT_CAP: ${{ steps.complexity.outputs.comment_cap || 'N/A' }}
         run: |
