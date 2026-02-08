@@ -1007,7 +1007,7 @@ jobs:
           # Append dynamic context at the end (after static cacheable portion)
           {
             echo 'REVIEW_PROMPT_DYNAMIC<<__REVIEW_DYNAMIC_DELIM__'
-            cat <<__DYNAMIC_CONTENT__
+            cat <<'__DYNAMIC_CONTENT__'
           REPO: ${{ github.repository }}
           PR NUMBER: ${{ github.event.issue.number }}
           LINEAR ISSUE: ${{ steps.linear.outputs.linear_id || 'Not specified' }}
