@@ -961,12 +961,13 @@ jobs:
 
           Substitute the actual REPO and PROGRESS_COMMENT_ID from the context variables below.
 
-          Update at these milestones (use the exact bodies below):
+          Update at these milestones. Include a CI status line if CI_FAILING is true or checks are pending (omit if all pass or unavailable):
 
           **After reading review standards / CLAUDE.md:**
           ```
           🤖 **Claude review in progress...**
 
+          [CI status line — e.g., "❌ CI: 1 check failing" or "⏳ CI: 2 checks still running". Omit if all pass or unavailable.]
           ✅ Read review standards and repository context
           ⏳ Analyzing code changes...
           ```
@@ -975,6 +976,7 @@ jobs:
           ```
           🤖 **Claude review in progress...**
 
+          [CI status line — same as above]
           ✅ Read review standards and repository context
           ✅ Analyzed code changes
           ⏳ Composing review...
