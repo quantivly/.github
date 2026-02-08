@@ -16,7 +16,7 @@
 - **Linear** — Issue link, title, and alignment assessment
 - **⚙️ CI** — Failed checks with root cause/fix (omitted when passing)
 - **🔄 Re-review** — Prior findings status (omitted on first review)
-- **✅ Highlights** — Notable good practices
+- **🌟 Highlights** — Notable good practices
 - **📊 Findings** — Severity tally with inline comment count
 
 ### Severity Levels

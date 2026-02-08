@@ -236,7 +236,7 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 
 [If re-review: "🔄 **Re-review (N)**<br>X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
-✅ **Highlights**
+🌟 **Highlights**
 - [Notable good practice]
 - [Another positive]
 

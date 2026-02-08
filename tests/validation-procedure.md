@@ -76,7 +76,7 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 - [ ] All required sections present:
   - [ ] 📋 Summary
   - [ ] Linear (issue link, title, alignment)
-  - [ ] ✅ Highlights
+  - [ ] 🌟 Highlights
   - [ ] 📊 Findings (severity tally)
   - [ ] Footer (commenter, logs, reactions)
 - [ ] Optional sections present when applicable:
@@ -234,7 +234,7 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 
 - [ ] Review posted successfully
 - [ ] **📊 Findings** shows 🚨 0 · ⚠️ 0 · 💡 0 (or minimal suggestions)
-- [ ] **✅ Highlights** mentions:
+- [ ] **🌟 Highlights** mentions:
   - [ ] Parameterized queries
   - [ ] Proper error handling
   - [ ] Comprehensive test coverage
@@ -322,7 +322,7 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 - [ ] New or remaining issues are flagged normally with inline comments
 - [ ] Review count is accurate (matches number of previous Claude reviews)
 - [ ] **📊 Findings** shows reduced or zero counts
-- [ ] **✅ Highlights** mentions fixes
+- [ ] **🌟 Highlights** mentions fixes
 - [ ] Review event changes to **APPROVE** or **COMMENT**
 - [ ] Review acknowledges improvements
 
