@@ -238,9 +238,9 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 ```
 
 **Review event** is chosen based on findings:
-- `REQUEST_CHANGES`: Has CRITICAL issues
+- `REQUEST_CHANGES`: Has CRITICAL issues OR CI checks are failing
 - `COMMENT`: Has HIGH issues or needs clarification
-- `APPROVE`: Only suggestions, no blockers
+- `APPROVE`: Only suggestions, no blockers, AND CI is not failing
 
 **Inline comments** use severity emoji prefixes and bolded short titles:
 - 🚨 for security and data loss issues (must fix)
@@ -259,6 +259,27 @@ Each inline comment must include a concrete fix suggestion. When the fix directl
 - Suggestion blocks only work on lines that are part of the PR diff
 
 Project-level observations (Linear misalignment, PR scope, architectural direction) belong in the review body, not as inline comments.
+
+## CI Status
+
+The review workflow automatically fetches CI check run status for the PR's head commit before the review begins. This ensures Claude has visibility into build/test health.
+
+### Behavior
+
+| CI State | Review Impact |
+|----------|---------------|
+| **Checks failing** | `REQUEST_CHANGES` — CI failure reported in review body (not inline), code findings still included as inline comments |
+| **Checks still running** (timed out waiting) | Advisory note in summary — does not block the review |
+| **All checks passing** | No CI line in summary — normal review behavior |
+| **No checks found / unavailable** | No CI line in summary — normal review behavior |
+
+### Implementation
+
+The workflow waits up to 5 minutes for pending CI checks to complete before starting the review. The review workflow's own check run (`Claude PR Review`) is excluded from CI status to avoid self-referencing. Failed checks include relative timestamps (e.g., "2h ago") to help assess staleness.
+
+### Why CI Failures Block APPROVE
+
+A code review that APPROVEs despite failing CI is contradictory — it signals the PR is ready to merge when it isn't. CI failures (broken builds, failing tests) are treated as CRITICAL-level signals because they indicate the code cannot be safely deployed regardless of code quality.
 
 ## Review Guidelines
 
@@ -465,6 +486,7 @@ This document should evolve based on:
 
 ## Changelog
 
+- **2026-02-08**: Added CI Status section — reviews now check CI health and block APPROVE when checks are failing
 - **2026-02-07**: Added GitHub suggestion block guidance for inline comments, bolded short titles format, suggestion vs regular code block rules
 - **2026-02-07**: Added false-positive exclusion list, BAA guidance for third-party integrations, framework-specific patterns (Django, Next.js), severity decision heuristic, changelog section
 - **2026-02-06**: Added few-shot review examples, adaptive comment caps, silent failure patterns, testing assessment approach
@@ -473,6 +495,6 @@ This document should evolve based on:
 
 ---
 
-**Last Updated**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Owner**: Engineering Team
 **Related**: [Claude Integration Guide](claude-integration-guide.md), [Review Examples](review-examples.md), Repository CLAUDE.md files

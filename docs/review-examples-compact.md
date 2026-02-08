@@ -91,6 +91,22 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 
 ---
 
+## Example 4: CI Failing — REQUEST_CHANGES with No Code Findings
+
+**Scenario**: PR has clean code but the Docker build CI check has been failing for 2 days. No code-level issues found.
+
+```json
+{
+  "event": "REQUEST_CHANGES",
+  "body": "## 📋 Summary\n\n> Updates Dockerfile base image and adds health check endpoint.\n\n**Linear**: [SRE-5678](https://linear.app/quantivly/issue/SRE-5678/) — ✅ Aligned\n\n**CI**: ❌ 1 check failing:\n- `Docker Build`: failure (2d ago)\n\nCI checks must pass before this PR can be approved. Please investigate the Docker build failure and push a fix.\n\n**Highlights**:\n- ✅ Proper multi-stage build reduces image size\n- ✅ Health check uses lightweight endpoint\n\n**Issues**: 🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12355) · 👍 👎</sub>",
+  "comments": []
+}
+```
+
+**Why good**: REQUEST_CHANGES despite no code findings — CI failure is a merge blocker. CI details in body (not inline). Empty comments array since this is a project-level concern. Still includes highlights for the code that was reviewed.
+
+---
+
 ## Anti-Examples: What Bad Reviews Look Like
 
 ### Anti-Example A: Flagging Formatting Issues (ruff's Job)
