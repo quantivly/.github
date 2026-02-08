@@ -9,7 +9,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"18\"> [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned (implements export with date filtering as specified)\n\n**Highlights**:\n- ✅ Good use of streaming response for large datasets\n- ✅ Proper Celery task for async generation\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned<br>\n*Implements export with date filtering as specified.*\n\n✅ **Highlights**\n- Good use of streaming response for large datasets\n- Proper Celery task for async generation\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/export/views.py",
@@ -38,7 +38,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"18\"> [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — ⚠️ Gaps (issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure)\n\n**Highlights**:\n- ✅ Proper use of database transaction for atomic bulk update\n- ✅ Dry-run mode for safe testing\n\n🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — ⚠️ Gaps<br>\n*Issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure.*\n\n✅ **Highlights**\n- Proper use of database transaction for atomic bulk update\n- Dry-run mode for safe testing\n\n🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
@@ -69,7 +69,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds paginated list endpoint for facility equipment inventory.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"18\"> [HUB-4567](https://linear.app/quantivly/issue/HUB-4567/) — ✅ Aligned\n\n**Highlights**:\n- ✅ Proper use of DjangoFilterBackend for query parameters\n- ✅ Serializer validates equipment status transitions\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds paginated list endpoint for facility equipment inventory.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-4567](https://linear.app/quantivly/issue/HUB-4567/) — ✅ Aligned\n\n✅ **Highlights**\n- Proper use of DjangoFilterBackend for query parameters\n- Serializer validates equipment status transitions\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/equipment/views.py",
@@ -98,7 +98,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## 📋 Summary\n\n> Updates Dockerfile base image and adds health check endpoint.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"18\"> [SRE-5678](https://linear.app/quantivly/issue/SRE-5678/) — ✅ Aligned\n\n**CI**:\n- [❌ Docker Build](https://github.com/quantivly/sre-core/actions/runs/12355/job/34567) (2d ago)\n\n> **Root cause**: `npm install` fails — commit `ad9e22c` from `quantivly/sre-ui-components` is unreachable because the branch (`feat/new-tokens`) was force-pushed. Update `package.json` to the new HEAD or a released version.\n\n**Highlights**:\n- ✅ Proper multi-stage build reduces image size\n- ✅ Health check uses lightweight endpoint\n\n🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12355) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Updates Dockerfile base image and adds health check endpoint.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [SRE-5678](https://linear.app/quantivly/issue/SRE-5678/) — ✅ Aligned\n\n**CI**\n- [❌ Docker Build](https://github.com/quantivly/sre-core/actions/runs/12355/job/34567) (2d ago)\n\n> **Root cause**: `npm install` fails — commit `ad9e22c` from `quantivly/sre-ui-components` is unreachable because the branch (`feat/new-tokens`) was force-pushed. Update `package.json` to the new HEAD or a released version.\n\n✅ **Highlights**\n- Proper multi-stage build reduces image size\n- Health check uses lightweight endpoint\n\n🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12355) · 👍 👎</sub>",
   "comments": []
 }
 ```

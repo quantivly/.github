@@ -224,9 +224,11 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 ```markdown
 > [1-2 sentences: what the PR does]
 
-<img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="18"> [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]
+<img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned]<br>
+*[1-sentence alignment reason]*
 
-**CI**: [If checks failing: bulleted list of `[❌ name](url) (time ago)` + blockquote `> **Root cause**: ...` summary (no count line). For multiple failures, note whether they share a root cause or are independent. If pending: "⏳ N check(s) still running". If all pass or unavailable: omit.]
+**CI**
+[If checks failing: bulleted list of `[❌ name](url) (time ago)` + blockquote `> **Root cause**: ...` summary (no count line). For multiple failures, note whether they share a root cause or are independent. If pending: "⏳ N check(s) still running". If all pass or unavailable: omit.]
 
 [If re-review: "🔄 **Re-review #N** — X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
@@ -234,9 +236,9 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 
 [If findings were omitted due to comment cap, add a collapsible <details> block listing them with file:line references.]
 
-**Highlights**:
-- ✅ [Notable good practice]
-- ✅ [Another positive]
+✅ **Highlights**
+- [Notable good practice]
+- [Another positive]
 ```
 
 **Review event** is chosen based on findings:
@@ -492,6 +494,7 @@ This document should evolve based on:
 
 ## Changelog
 
+- **2026-02-08**: Improve formatting consistency — Linear icon `height="15" align="absmiddle"`, alignment reason on italic second line, Highlights uses emoji+bold header, CI/pending lines drop bold-colon prefix
 - **2026-02-08**: Drop redundant count line from CI section; for multiple failures, root cause notes whether issues are related or independent
 - **2026-02-08**: CI failure section uses blockquote root cause format and cleaner `[❌ name](url)` check links; CI_STATUS input cleaned of redundant noise
 - **2026-02-08**: CI reviews now hyperlink failed check names to run URLs and investigate cross-repo dependency failures
