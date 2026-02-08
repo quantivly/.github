@@ -717,7 +717,7 @@ jobs:
             echo 'REVIEW_CLAUDE_ARGS<<__CLAUDE_ARGS_DELIM__'
             cat <<__ARGS_CONTENT__
           --model ${{ steps.ci-status.outputs.model_override || steps.complexity.outputs.model }}
-          --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh api -X POST:*),Bash(gh api -X PATCH:*),Bash(gh api repos/:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+          --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh run view:*),Bash(gh api -X POST:*),Bash(gh api -X PATCH:*),Bash(gh api repos/:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           --max-turns ${MAX_TURNS}
           ${MCP_FLAG}
           __ARGS_CONTENT__
@@ -1038,11 +1038,12 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           # Allow tools for PR review:
           # - Linear MCP tools (issue context, requirements) via --mcp-config in claude_args
-          # - gh CLI for: reading PR data, cross-repo files, submitting batched review, progress updates
+          # - gh CLI for: reading PR data, CI run logs, cross-repo files, submitting batched review, progress updates
           # - File tools for reading codebase
           # - git for commit history context
           # Review submission uses gh api POST to /reviews with comments array (single review event)
           # gh api scoped to: POST reviews, PATCH progress comments, GET cross-repo files
+          # gh run view: read-only access to CI run logs for failure investigation
           claude_args: ${{ env.REVIEW_CLAUDE_ARGS }}
           # Static prompt (cacheable) + dynamic PR context (appended at end)
           prompt: "${{ env.REVIEW_PROMPT }}\n${{ env.REVIEW_PROMPT_DYNAMIC }}"
