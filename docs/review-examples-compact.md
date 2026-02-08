@@ -9,7 +9,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "COMMENT",
-  "body": "> Adds CSV export endpoint for study utilization data with date range filtering.\n\n**Linear**: [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned (implements export with date filtering as specified)\n\n**Issues**: 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Good use of streaming response for large datasets\n- ✅ Proper Celery task for async generation\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n**Linear**: [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — ✅ Aligned (implements export with date filtering as specified)\n\n**Highlights**:\n- ✅ Good use of streaming response for large datasets\n- ✅ Proper Celery task for async generation\n\n**Issues**: 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/export/views.py",
@@ -38,7 +38,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "> Adds management command to bulk-update patient study assignments.\n\n**Linear**: [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — ⚠️ Gaps (issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure)\n\n**Issues**: 🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Proper use of database transaction for atomic bulk update\n- ✅ Dry-run mode for safe testing\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n**Linear**: [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — ⚠️ Gaps (issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure)\n\n**Highlights**:\n- ✅ Proper use of database transaction for atomic bulk update\n- ✅ Dry-run mode for safe testing\n\n**Issues**: 🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
@@ -69,7 +69,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "COMMENT",
-  "body": "> Adds paginated list endpoint for facility equipment inventory.\n\n**Linear**: [HUB-4567](https://linear.app/quantivly/issue/HUB-4567/) — ✅ Aligned\n\n**Issues**: 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n**Highlights**:\n- ✅ Proper use of DjangoFilterBackend for query parameters\n- ✅ Serializer validates equipment status transitions\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds paginated list endpoint for facility equipment inventory.\n\n**Linear**: [HUB-4567](https://linear.app/quantivly/issue/HUB-4567/) — ✅ Aligned\n\n**Highlights**:\n- ✅ Proper use of DjangoFilterBackend for query parameters\n- ✅ Serializer validates equipment status transitions\n\n**Issues**: 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/equipment/views.py",
@@ -145,5 +145,5 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 
 ---
 
-**Last Updated**: 2026-02-07
+**Last Updated**: 2026-02-08
 **Related**: [Full Review Examples](review-examples.md), [Review Standards](review-standards.md)
