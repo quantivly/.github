@@ -222,9 +222,13 @@ Evaluate behavioral coverage, not just whether test files exist. Ask: "Would the
 The review body should be a concise summary. Code-specific findings (CRITICAL, HIGH, Suggestion) are posted as inline comments on the PR diff — not in the review body.
 
 ```markdown
+## 📋 Summary
+
 > [1-2 sentences: what the PR does]
 
-<img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/)<br>
+<img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> **Linear**
+
+[Issue-ID](url) — _[exact issue title from Linear]_<br>
 [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned] — [1-sentence alignment reason]
 
 ⚙️ **CI**
@@ -232,13 +236,13 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 
 [If re-review: "🔄 **Re-review (N)**<br>X of Y prior findings addressed. Focusing on new/changed code." Omit on first review.]
 
-🚨 X · ⚠️ Y · 💡 Z — see inline comments
-
-[If findings were omitted due to comment cap, add a collapsible <details> block listing them with file:line references.]
-
 ✅ **Highlights**
 - [Notable good practice]
 - [Another positive]
+
+📊 **Findings** — 🚨 X · ⚠️ Y · 💡 Z — see inline comments
+
+[If findings were omitted due to comment cap, add a collapsible <details> block listing them with file:line references.]
 ```
 
 **Review event** is chosen based on findings:
@@ -246,12 +250,14 @@ The review body should be a concise summary. Code-specific findings (CRITICAL, H
 - `COMMENT`: Has HIGH issues or needs clarification
 - `APPROVE`: Only suggestions, no blockers, AND CI is not failing
 
-**Inline comments** use severity emoji prefixes and bolded short titles:
-- 🚨 for security and data loss issues (must fix)
-- ⚠️ for bugs and logic errors (should fix)
-- 💡 for improvements (nice to have)
+**Inline comments** use severity emoji prefixes, bolded short titles, and action labels:
+- 🚨 · must fix — security and data loss issues
+- ⚠️ · should fix — bugs and logic errors
+- 💡 · nice to have — improvements
 
-Format: `<emoji> **<Short Title>** → explanation → suggestion/code block`
+Format: `<emoji> **<Short Title>** · <action>` followed by explanation and fix.
+
+When using a regular code block (not a suggestion block), label the fix with `**Fix** —` to visually separate the diagnosis from the action.
 
 Each inline comment must include a concrete fix suggestion. When the fix directly replaces the commented line(s), use a GitHub suggestion block (`` ```suggestion ``) so the developer can one-click apply or batch suggestions into a commit. When the fix involves changes elsewhere or structural modifications, use a regular code block with language annotation (e.g., `` ```python ``).
 

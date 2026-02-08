@@ -9,19 +9,19 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/)<br>\n✅ Aligned — Implements export with date filtering as specified.\n\n✅ **Highlights**\n- Good use of streaming response for large datasets\n- Proper Celery task for async generation\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — _Add CSV export for study utilization_<br>\n✅ Aligned — Implements export with date filtering as specified.\n\n✅ **Highlights**\n- Good use of streaming response for large datasets\n- Proper Celery task for async generation\n\n📊 **Findings** — 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/export/views.py",
       "line": 47,
       "side": "RIGHT",
-      "body": "⚠️ **Unprotected date interpolation**\n\nThe `start_date` parameter is interpolated directly into the queryset filter via `__range` with an f-string. While Django ORM parameterizes `filter()` calls, this intermediate string formatting defeats that protection.\n\n```suggestion\nStudy.objects.filter(created_at__range=(start_date, end_date))\n```"
+      "body": "⚠️ **Unprotected date interpolation** · should fix\n\nThe `start_date` parameter is interpolated directly into the queryset filter via `__range` with an f-string. While Django ORM parameterizes `filter()` calls, this intermediate string formatting defeats that protection.\n\n```suggestion\nStudy.objects.filter(created_at__range=(start_date, end_date))\n```"
     },
     {
       "path": "apps/export/views.py",
       "line": 62,
       "side": "RIGHT",
-      "body": "💡 **Empty dataset returns data file**\n\nWhen `queryset` is empty, `csv.writer` still writes the header row but the response Content-Disposition suggests a data file. Consider returning a 204 No Content or including a message row so users understand the export is intentionally empty rather than broken."
+      "body": "💡 **Empty dataset returns data file** · nice to have\n\nWhen `queryset` is empty, `csv.writer` still writes the header row but the response Content-Disposition suggests a data file. Consider returning a 204 No Content or including a message row so users understand the export is intentionally empty rather than broken."
     }
   ]
 }
@@ -38,7 +38,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/)<br>\n⚠️ Gaps — Issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure.\n\n✅ **Highlights**\n- Proper use of database transaction for atomic bulk update\n- Dry-run mode for safe testing\n\n🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — _Bulk-update patient study assignments_<br>\n⚠️ Gaps — Issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure.\n\n✅ **Highlights**\n- Proper use of database transaction for atomic bulk update\n- Dry-run mode for safe testing\n\n📊 **Findings** — 🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
@@ -46,13 +46,13 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
       "line": 34,
       "start_side": "RIGHT",
       "side": "RIGHT",
-      "body": "🚨 **PHI in application logs**\n\nPatient MRN and name are logged in plaintext via `logger.info(f\"Reassigning {patient.name} (MRN: {patient.mrn})\")`. This is a HIPAA violation — PHI must not appear in application logs.\n\nIf an audit trail is needed, use the existing `AuditLog` model which handles PHI encryption.\n\n```suggestion\nlogger.info(\"Reassigning study %s for patient pk=%s\", assignment.id, patient.pk)\n```"
+      "body": "🚨 **PHI in application logs** · must fix\n\nPatient MRN and name are logged in plaintext via `logger.info(f\"Reassigning {patient.name} (MRN: {patient.mrn})\")`. This is a HIPAA violation — PHI must not appear in application logs.\n\nIf an audit trail is needed, use the existing `AuditLog` model which handles PHI encryption.\n\n```suggestion\nlogger.info(\"Reassigning study %s for patient pk=%s\", assignment.id, patient.pk)\n```"
     },
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
       "line": 58,
       "side": "RIGHT",
-      "body": "💡 **Large batch size default**\n\nThe `--batch-size` argument defaults to 1000. For facilities with 50k+ studies, this could cause memory pressure. Consider adding a progress bar with `tqdm` and processing in smaller batches (e.g., default 200) to keep memory bounded."
+      "body": "💡 **Large batch size default** · nice to have\n\nThe `--batch-size` argument defaults to 1000. For facilities with 50k+ studies, this could cause memory pressure. Consider adding a progress bar with `tqdm` and processing in smaller batches (e.g., default 200) to keep memory bounded."
     }
   ]
 }
@@ -69,19 +69,19 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds paginated list endpoint for facility equipment inventory.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-4567](https://linear.app/quantivly/issue/HUB-4567/)<br>\n✅ Aligned\n\n✅ **Highlights**\n- Proper use of DjangoFilterBackend for query parameters\n- Serializer validates equipment status transitions\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds paginated list endpoint for facility equipment inventory.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-4567](https://linear.app/quantivly/issue/HUB-4567/) — _Paginated equipment inventory endpoint_<br>\n✅ Aligned\n\n✅ **Highlights**\n- Proper use of DjangoFilterBackend for query parameters\n- Serializer validates equipment status transitions\n\n📊 **Findings** — 🚨 0 · ⚠️ 2 · 💡 0 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/equipment/views.py",
       "line": 38,
       "side": "RIGHT",
-      "body": "⚠️ **Unbounded queryset**\n\nThe `get_queryset` method returns `Equipment.objects.all()` without pagination defaults. If the frontend omits the `page` query parameter, Django REST Framework returns all rows in a single response.\n\n```suggestion\n    return Equipment.objects.all().order_by('id')[:100]\n```"
+      "body": "⚠️ **Unbounded queryset** · should fix\n\nThe `get_queryset` method returns `Equipment.objects.all()` without pagination defaults. If the frontend omits the `page` query parameter, Django REST Framework returns all rows in a single response.\n\n```suggestion\n    return Equipment.objects.all().order_by('id')[:100]\n```"
     },
     {
       "path": "apps/equipment/views.py",
       "line": 25,
       "side": "RIGHT",
-      "body": "⚠️ **Missing `select_related` for FK traversal**\n\nThe serializer accesses `equipment.facility.name` (line 52), but the queryset doesn't prefetch the facility relation. This creates an N+1 query — one additional query per equipment item.\n\nFix: Add `select_related` to the queryset in `get_queryset`:\n```python\nreturn Equipment.objects.select_related('facility').all()\n```\n\n(Not using a suggestion block because the fix applies to `get_queryset` at line 38, not to the viewset class definition at line 25 where the issue manifests.)"
+      "body": "⚠️ **Missing `select_related` for FK traversal** · should fix\n\nThe serializer accesses `equipment.facility.name` (line 52), but the queryset doesn't prefetch the facility relation. This creates an N+1 query — one additional query per equipment item.\n\n**Fix** — add `select_related` to the queryset in `get_queryset`:\n```python\nreturn Equipment.objects.select_related('facility').all()\n```\n\n(Not using a suggestion block because the fix applies to `get_queryset` at line 38, not to the viewset class definition at line 25 where the issue manifests.)"
     }
   ]
 }
@@ -98,7 +98,7 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## 📋 Summary\n\n> Updates Dockerfile base image and adds health check endpoint.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [SRE-5678](https://linear.app/quantivly/issue/SRE-5678/)<br>\n✅ Aligned\n\n⚙️ **CI**\n- [❌ Docker Build](https://github.com/quantivly/sre-core/actions/runs/12355/job/34567) (2d ago)\n\n**Root cause**: `npm install` fails — commit `ad9e22c` from `quantivly/sre-ui-components` is unreachable because the branch (`feat/new-tokens`) was force-pushed.<br>\n**Fix**: Update `package.json` to the new HEAD or a released version.\n\n✅ **Highlights**\n- Proper multi-stage build reduces image size\n- Health check uses lightweight endpoint\n\n🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12355) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Updates Dockerfile base image and adds health check endpoint.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[SRE-5678](https://linear.app/quantivly/issue/SRE-5678/) — _Update Dockerfile base image and add health check_<br>\n✅ Aligned\n\n⚙️ **CI**\n- [❌ Docker Build](https://github.com/quantivly/sre-core/actions/runs/12355/job/34567) (2d ago)\n\n**Root cause**: `npm install` fails — commit `ad9e22c` from `quantivly/sre-ui-components` is unreachable because the branch (`feat/new-tokens`) was force-pushed.<br>\n**Fix**: Update `package.json` to the new HEAD or a released version.\n\n✅ **Highlights**\n- Proper multi-stage build reduces image size\n- Health check uses lightweight endpoint\n\n📊 **Findings** — 🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12355) · 👍 👎</sub>",
   "comments": []
 }
 ```

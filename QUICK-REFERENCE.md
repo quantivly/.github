@@ -12,19 +12,18 @@
 
 ### Review Structure
 
-- **Summary** - High-level assessment
-- **Alignment** - How well it meets Linear requirements
-- **Critical Issues** - Must fix (CRITICAL, HIGH)
-- **Suggestions** - Nice to have
-- **Positive Observations** - What you did well
-- **Testing** - Coverage assessment
-- **Recommendation** - APPROVE / REQUEST_CHANGES / COMMENT
+- **📋 Summary** — What the PR does (1-2 sentences)
+- **Linear** — Issue link, title, and alignment assessment
+- **⚙️ CI** — Failed checks with root cause/fix (omitted when passing)
+- **🔄 Re-review** — Prior findings status (omitted on first review)
+- **✅ Highlights** — Notable good practices
+- **📊 Findings** — Severity tally with inline comment count
 
 ### Severity Levels
 
-- **CRITICAL** - Security vulnerabilities, data loss (must fix immediately)
-- **HIGH** - Logic errors, broken functionality (must fix before merge)
-- **SUGGESTION** - Improvements, nice-to-have (use judgment)
+- 🚨 · **must fix** — Security vulnerabilities, data loss
+- ⚠️ · **should fix** — Logic errors, bugs
+- 💡 · **nice to have** — Improvements, suggestions
 
 ### What Claude Checks
 

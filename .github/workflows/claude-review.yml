@@ -880,7 +880,9 @@ jobs:
           5. Flag any gaps between requirements and implementation
 
           If Linear MCP tools are unavailable (connection error, timeout, tool not found), report in the summary:
-          <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> ⚠️ MCP unavailable — could not connect to Linear
+          <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> **Linear**
+
+          ⚠️ MCP unavailable — could not connect to Linear
           Do NOT say "Not found" if the tools failed to connect — distinguish between "issue doesn't exist" and "couldn't reach Linear".
 
           ## Before Submitting
@@ -920,10 +922,15 @@ jobs:
           > [!NOTE]
           > **Large PR** — ... [only if DIFF_LINES > 500, see Constraints above]
 
-          <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/)<br>
+          <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> **Linear**
+
+          [Issue-ID](https://linear.app/quantivly/issue/Issue-ID/) — _[exact issue title from Linear]_<br>
           [Status: ✅ Aligned / ⚠️ Gaps / ❌ Misaligned] — [1-sentence alignment reason]
 
-          Place the status and alignment reason on a second line after `<br>`. Format: `✅ Aligned — reason` (or ⚠️ Gaps / ❌ Misaligned). Keep the reason to one short sentence. Do NOT use asterisks or italics on the reason text. If no Linear issue is found, use "Not specified" instead of the link.
+          Include the exact issue title from the Linear MCP response (`title` field) after the issue link, in italics, separated by an em dash. Place the status and alignment reason on the next line after `<br>`. Format: `✅ Aligned — reason` (or ⚠️ Gaps / ❌ Misaligned). Keep the reason to one short sentence. Do NOT use asterisks or italics on the reason text. If no Linear issue is found, use "Not specified" instead of the link and omit the title. If Linear MCP is unavailable, show:
+          <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> **Linear**
+
+          ⚠️ MCP unavailable — could not connect to Linear
 
           ⚙️ **CI**
           [If CI_FAILING is true, use this exact structure:]
@@ -943,7 +950,7 @@ jobs:
           - [Notable good practice]
           - [Another positive]
 
-          🚨 X · ⚠️ Y · 💡 Z — see inline comments
+          📊 **Findings** — 🚨 X · ⚠️ Y · 💡 Z — see inline comments
 
           [If any findings were omitted because they exceeded the inline comment cap, add a collapsible block:]
           <details>
@@ -961,10 +968,12 @@ jobs:
 
           Keep the summary short. All code-specific findings go in the `comments` array. Project-level findings belong in the `body` only. If the only findings are project-level, submit with an empty `comments` array.
           If previous reviews exist (PREVIOUS_REVIEW_COUNT > 0), prioritize new findings. Acknowledge addressed issues briefly in the summary. Only re-flag a prior finding as an inline comment if the fix attempt introduced a new problem.
-          Format each inline comment as: `<emoji> **<Short Title>**` followed by explanation and fix.
-          - 🚨 for security and data loss issues (must fix)
-          - ⚠️ for bugs and logic errors (should fix)
-          - 💡 for improvements (nice to have)
+          Format each inline comment as: `<emoji> **<Short Title>** · <action>` followed by explanation and fix.
+          - 🚨 · must fix — security and data loss issues
+          - ⚠️ · should fix — bugs and logic errors
+          - 💡 · nice to have — improvements
+
+          When using a regular code block (not a suggestion block), label the fix with `**Fix** —` to visually separate the diagnosis from the action.
 
           ## Progress Updates (Optional, Non-Blocking)
 

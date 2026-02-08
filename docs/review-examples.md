@@ -11,19 +11,19 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/)<br>\n✅ Aligned — Implements export with date filtering as specified.\n\n✅ **Highlights**\n- Good use of streaming response for large datasets\n- Proper Celery task for async generation\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — _Add CSV export for study utilization_<br>\n✅ Aligned — Implements export with date filtering as specified.\n\n✅ **Highlights**\n- Good use of streaming response for large datasets\n- Proper Celery task for async generation\n\n📊 **Findings** — 🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12345) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/export/views.py",
       "line": 47,
       "side": "RIGHT",
-      "body": "⚠️ **Unprotected date interpolation**\n\nThe `start_date` parameter is interpolated directly into the queryset filter via `__range` with an f-string. While Django ORM parameterizes `filter()` calls, this intermediate string formatting defeats that protection.\n\n```suggestion\nStudy.objects.filter(created_at__range=(start_date, end_date))\n```"
+      "body": "⚠️ **Unprotected date interpolation** · should fix\n\nThe `start_date` parameter is interpolated directly into the queryset filter via `__range` with an f-string. While Django ORM parameterizes `filter()` calls, this intermediate string formatting defeats that protection.\n\n```suggestion\nStudy.objects.filter(created_at__range=(start_date, end_date))\n```"
     },
     {
       "path": "apps/export/views.py",
       "line": 62,
       "side": "RIGHT",
-      "body": "💡 **Empty dataset returns data file**\n\nWhen `queryset` is empty, `csv.writer` still writes the header row but the response Content-Disposition suggests a data file. Consider returning a 204 No Content or including a message row so users understand the export is intentionally empty rather than broken."
+      "body": "💡 **Empty dataset returns data file** · nice to have\n\nWhen `queryset` is empty, `csv.writer` still writes the header row but the response Content-Disposition suggests a data file. Consider returning a 204 No Content or including a message row so users understand the export is intentionally empty rather than broken."
     }
   ]
 }
@@ -51,7 +51,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "APPROVE",
-  "body": "## 📋 Summary\n\n> Adds role-based dashboard filtering so facility managers only see their assigned facilities.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-5678](https://linear.app/quantivly/issue/HUB-5678/)<br>\n✅ Aligned — Implements all 3 acceptance criteria.\n\n✅ **Highlights**\n- Access control check at both GraphQL resolver and queryset level (defense in depth)\n- Comprehensive test coverage including cross-facility access denial\n- Audit logging for filtered access attempts\n\n🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12346) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds role-based dashboard filtering so facility managers only see their assigned facilities.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-5678](https://linear.app/quantivly/issue/HUB-5678/) — _Role-based dashboard filtering for facility managers_<br>\n✅ Aligned — Implements all 3 acceptance criteria.\n\n✅ **Highlights**\n- Access control check at both GraphQL resolver and queryset level (defense in depth)\n- Comprehensive test coverage including cross-facility access denial\n- Audit logging for filtered access attempts\n\n📊 **Findings** — 🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12346) · 👍 👎</sub>",
   "comments": []
 }
 ```
@@ -74,7 +74,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "APPROVE",
-  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-1234](https://linear.app/quantivly/issue/HUB-1234/)<br>\n✅ Aligned\n\n🔄 **Re-review (2)**<br>\n2 of 2 prior findings addressed. Focusing on new/changed code.\n\n✅ **Highlights**\n- SQL parameterization fixed — dates now passed directly to ORM filter\n- Empty dataset now returns 204 with descriptive message header\n\n🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12347) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds CSV export endpoint for study utilization data with date range filtering.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-1234](https://linear.app/quantivly/issue/HUB-1234/) — _Add CSV export for study utilization_<br>\n✅ Aligned\n\n🔄 **Re-review (2)**<br>\n2 of 2 prior findings addressed. Focusing on new/changed code.\n\n✅ **Highlights**\n- SQL parameterization fixed — dates now passed directly to ORM filter\n- Empty dataset now returns 204 with descriptive message header\n\n📊 **Findings** — 🚨 0 · ⚠️ 0 · 💡 0\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12347) · 👍 👎</sub>",
   "comments": []
 }
 ```
@@ -97,7 +97,7 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-9012](https://linear.app/quantivly/issue/HUB-9012/)<br>\n⚠️ Gaps — Issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure.\n\n✅ **Highlights**\n- Proper use of database transaction for atomic bulk update\n- Dry-run mode for safe testing\n\n🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds management command to bulk-update patient study assignments.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-9012](https://linear.app/quantivly/issue/HUB-9012/) — _Bulk-update patient study assignments_<br>\n⚠️ Gaps — Issue doesn't mention logging, but HIPAA requires audit trail without PHI exposure.\n\n✅ **Highlights**\n- Proper use of database transaction for atomic bulk update\n- Dry-run mode for safe testing\n\n📊 **Findings** — 🚨 1 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12348) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
@@ -105,13 +105,13 @@ This document provides concrete examples of complete Claude reviews for referenc
       "line": 34,
       "start_side": "RIGHT",
       "side": "RIGHT",
-      "body": "🚨 **PHI in application logs**\n\nPatient MRN and name are logged in plaintext via `logger.info(f\"Reassigning {patient.name} (MRN: {patient.mrn})\")`. This is a HIPAA violation — PHI must not appear in application logs.\n\nIf an audit trail is needed, use the existing `AuditLog` model which handles PHI encryption.\n\n```suggestion\nlogger.info(\"Reassigning study %s for patient pk=%s\", assignment.id, patient.pk)\n```"
+      "body": "🚨 **PHI in application logs** · must fix\n\nPatient MRN and name are logged in plaintext via `logger.info(f\"Reassigning {patient.name} (MRN: {patient.mrn})\")`. This is a HIPAA violation — PHI must not appear in application logs.\n\nIf an audit trail is needed, use the existing `AuditLog` model which handles PHI encryption.\n\n```suggestion\nlogger.info(\"Reassigning study %s for patient pk=%s\", assignment.id, patient.pk)\n```"
     },
     {
       "path": "apps/studies/management/commands/bulk_assign.py",
       "line": 58,
       "side": "RIGHT",
-      "body": "💡 **Large batch size default**\n\nThe `--batch-size` argument defaults to 1000. For facilities with 50k+ studies, this could cause memory pressure. Consider adding a progress bar with `tqdm` and processing in smaller batches (e.g., default 200) to keep memory bounded."
+      "body": "💡 **Large batch size default** · nice to have\n\nThe `--batch-size` argument defaults to 1000. For facilities with 50k+ studies, this could cause memory pressure. Consider adding a progress bar with `tqdm` and processing in smaller batches (e.g., default 200) to keep memory bounded."
     }
   ]
 }
@@ -137,13 +137,13 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "APPROVE",
-  "body": "## 📋 Summary\n\n> Updates project README with new deployment instructions and adds Helm chart values template.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [OPS-456](https://linear.app/quantivly/issue/OPS-456/)<br>\n✅ Aligned — Adds deployment docs as requested.\n\n✅ **Highlights**\n- Clear step-by-step deployment instructions with prerequisites\n- Helm values template includes sensible defaults with comments\n\n🚨 0 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12349) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Updates project README with new deployment instructions and adds Helm chart values template.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[OPS-456](https://linear.app/quantivly/issue/OPS-456/) — _Add deployment documentation and Helm chart template_<br>\n✅ Aligned — Adds deployment docs as requested.\n\n✅ **Highlights**\n- Clear step-by-step deployment instructions with prerequisites\n- Helm values template includes sensible defaults with comments\n\n📊 **Findings** — 🚨 0 · ⚠️ 0 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12349) · 👍 👎</sub>",
   "comments": [
     {
       "path": "docs/deployment.md",
       "line": 28,
       "side": "RIGHT",
-      "body": "💡 The example `POSTGRES_PASSWORD=changeme` could be mistaken for a real credential and accidentally committed as-is. Consider using a clearly placeholder value like `<your-password-here>` or referencing a secrets manager instead."
+      "body": "💡 **Placeholder credential in docs** · nice to have\n\nThe example `POSTGRES_PASSWORD=changeme` could be mistaken for a real credential and accidentally committed as-is. Consider using a clearly placeholder value like `<your-password-here>` or referencing a secrets manager instead."
     }
   ]
 }
@@ -167,19 +167,19 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Refactors authentication middleware to support multi-tenant Keycloak realms with per-facility token validation.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-2345](https://linear.app/quantivly/issue/HUB-2345/)<br>\n✅ Aligned — Implements all 4 acceptance criteria for multi-tenant auth.\n\n✅ **Highlights**\n- Token validation uses RS256 with JWKS endpoint (not shared secrets)\n- Per-facility realm isolation prevents cross-tenant data access\n- Comprehensive test suite with 12 test cases covering happy path and error scenarios\n\n🚨 0 · ⚠️ 3 · 💡 2 — see inline comments\n\n<details>\n<summary>📋 3 additional findings omitted (comment cap)</summary>\n\n- `middleware/keycloak.py:142` — Consider caching realm discovery documents to reduce auth latency\n- `middleware/keycloak.py:198` — The `max_retries=5` constant could be extracted to settings for configurability\n- `tests/test_auth.py:67` — Missing test for expired token with valid realm but revoked permissions\n\n</details>\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12350) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Refactors authentication middleware to support multi-tenant Keycloak realms with per-facility token validation.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-2345](https://linear.app/quantivly/issue/HUB-2345/) — _Multi-tenant Keycloak realm support_<br>\n✅ Aligned — Implements all 4 acceptance criteria for multi-tenant auth.\n\n✅ **Highlights**\n- Token validation uses RS256 with JWKS endpoint (not shared secrets)\n- Per-facility realm isolation prevents cross-tenant data access\n- Comprehensive test suite with 12 test cases covering happy path and error scenarios\n\n📊 **Findings** — 🚨 0 · ⚠️ 3 · 💡 2 — see inline comments\n\n<details>\n<summary>📋 3 additional findings omitted (comment cap)</summary>\n\n- `middleware/keycloak.py:142` — Consider caching realm discovery documents to reduce auth latency\n- `middleware/keycloak.py:198` — The `max_retries=5` constant could be extracted to settings for configurability\n- `tests/test_auth.py:67` — Missing test for expired token with valid realm but revoked permissions\n\n</details>\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12350) · 👍 👎</sub>",
   "comments": [
     {
       "path": "middleware/keycloak.py",
       "line": 67,
       "side": "RIGHT",
-      "body": "⚠️ **Missing audience claim validation**\n\nThe `audience` claim is not validated during token verification. An attacker with a valid token from a different Keycloak client could access this service's endpoints.\n\n```suggestion\ndecoded = jwt.decode(\n    token, key,\n    algorithms=['RS256'],\n    audience=settings.KEYCLOAK_CLIENT_ID,\n)\n```"
+      "body": "⚠️ **Missing audience claim validation** · should fix\n\nThe `audience` claim is not validated during token verification. An attacker with a valid token from a different Keycloak client could access this service's endpoints.\n\n```suggestion\ndecoded = jwt.decode(\n    token, key,\n    algorithms=['RS256'],\n    audience=settings.KEYCLOAK_CLIENT_ID,\n)\n```"
     },
     {
       "path": "middleware/keycloak.py",
       "line": 89,
       "side": "RIGHT",
-      "body": "⚠️ **Missing HTTP timeout**\n\n`requests.get(jwks_url)` has no timeout. If the Keycloak server is slow or unreachable, this blocks the request thread indefinitely.\n\n```suggestion\nresponse = requests.get(jwks_url, timeout=5)\n```"
+      "body": "⚠️ **Missing HTTP timeout** · should fix\n\n`requests.get(jwks_url)` has no timeout. If the Keycloak server is slow or unreachable, this blocks the request thread indefinitely.\n\n```suggestion\nresponse = requests.get(jwks_url, timeout=5)\n```"
     },
     {
       "path": "middleware/keycloak.py",
@@ -187,19 +187,19 @@ This document provides concrete examples of complete Claude reviews for referenc
       "line": 114,
       "start_side": "RIGHT",
       "side": "RIGHT",
-      "body": "⚠️ **Overly broad exception handler**\n\nThe `except Exception` block catches all errors during token decode (including `ImportError`, `MemoryError`) and returns 401. This masks unrelated failures as authentication errors.\n\n```suggestion\nexcept (jwt.ExpiredSignatureError, jwt.InvalidTokenError, jwt.DecodeError) as e:\n    logger.warning('Token validation failed: %s', e)\n    return JsonResponse({'error': 'Invalid token'}, status=401)\n```"
+      "body": "⚠️ **Overly broad exception handler** · should fix\n\nThe `except Exception` block catches all errors during token decode (including `ImportError`, `MemoryError`) and returns 401. This masks unrelated failures as authentication errors.\n\n```suggestion\nexcept (jwt.ExpiredSignatureError, jwt.InvalidTokenError, jwt.DecodeError) as e:\n    logger.warning('Token validation failed: %s', e)\n    return JsonResponse({'error': 'Invalid token'}, status=401)\n```"
     },
     {
       "path": "middleware/keycloak.py",
       "line": 156,
       "side": "RIGHT",
-      "body": "💡 **Per-request DB query for realm mapping**\n\nThe realm-to-facility mapping is loaded from the database on every request. For high-traffic endpoints, this adds a query per request. Consider using Django's `cache_page` or a TTL-based in-memory cache with a 5-minute expiry."
+      "body": "💡 **Per-request DB query for realm mapping** · nice to have\n\nThe realm-to-facility mapping is loaded from the database on every request. For high-traffic endpoints, this adds a query per request. Consider using Django's `cache_page` or a TTL-based in-memory cache with a 5-minute expiry."
     },
     {
       "path": "tests/test_auth.py",
       "line": 34,
       "side": "RIGHT",
-      "body": "💡 **Test algorithm mismatch**\n\nThe test JWT is constructed with `HS256` algorithm, but production uses `RS256`. This means the test doesn't exercise the JWKS key retrieval path. Consider using `PyJWT`'s `jwt.encode()` with an RSA test key to match production behavior."
+      "body": "💡 **Test algorithm mismatch** · nice to have\n\nThe test JWT is constructed with `HS256` algorithm, but production uses `RS256`. This means the test doesn't exercise the JWKS key retrieval path. Consider using `PyJWT`'s `jwt.encode()` with an RSA test key to match production behavior."
     }
   ]
 }
@@ -225,25 +225,25 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds facility dashboard endpoint aggregating study counts, equipment utilization, and alert summaries.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-3456](https://linear.app/quantivly/issue/HUB-3456/)<br>\n✅ Aligned\n\n**Custom focus**: N+1 queries and database performance (as requested)\n\n✅ **Highlights**\n- Good use of `annotate()` for study count aggregation (avoids per-facility query)\n- Dashboard response is paginated (won't unboundedly grow)\n\n🚨 0 · ⚠️ 2 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12351) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds facility dashboard endpoint aggregating study counts, equipment utilization, and alert summaries.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-3456](https://linear.app/quantivly/issue/HUB-3456/) — _Facility dashboard with study and equipment aggregation_<br>\n✅ Aligned\n\n**Custom focus**: N+1 queries and database performance (as requested)\n\n✅ **Highlights**\n- Good use of `annotate()` for study count aggregation (avoids per-facility query)\n- Dashboard response is paginated (won't unboundedly grow)\n\n📊 **Findings** — 🚨 0 · ⚠️ 2 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12351) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/dashboard/resolvers.py",
       "line": 45,
       "side": "RIGHT",
-      "body": "⚠️ N+1 query: `facility.equipment_set.all()` inside the list comprehension executes a separate query for each facility. With 50 facilities, this is 50 additional queries.\n\nFix: Add `prefetch_related` to the initial queryset:\n```python\nfacilities = Facility.objects.filter(\n    organization=org\n).prefetch_related('equipment_set').annotate(\n    study_count=Count('studies')\n)\n```"
+      "body": "⚠️ **N+1 query on equipment** · should fix\n\n`facility.equipment_set.all()` inside the list comprehension executes a separate query for each facility. With 50 facilities, this is 50 additional queries.\n\n**Fix** — add `prefetch_related` to the initial queryset:\n```python\nfacilities = Facility.objects.filter(\n    organization=org\n).prefetch_related('equipment_set').annotate(\n    study_count=Count('studies')\n)\n```"
     },
     {
       "path": "apps/dashboard/resolvers.py",
       "line": 72,
       "side": "RIGHT",
-      "body": "⚠️ `Alert.objects.filter(facility=facility, resolved=False).count()` inside the loop creates another N+1 pattern. This can be aggregated in one query.\n\nFix: Use a subquery annotation:\n```python\nfrom django.db.models import Subquery, OuterRef\n\nopen_alerts = Alert.objects.filter(\n    facility=OuterRef('pk'), resolved=False\n).values('facility').annotate(c=Count('*')).values('c')\n\nfacilities = facilities.annotate(open_alert_count=Subquery(open_alerts))\n```"
+      "body": "⚠️ **N+1 query on alert counts** · should fix\n\n`Alert.objects.filter(facility=facility, resolved=False).count()` inside the loop creates another N+1 pattern. This can be aggregated in one query.\n\n**Fix** — use a subquery annotation:\n```python\nfrom django.db.models import Subquery, OuterRef\n\nopen_alerts = Alert.objects.filter(\n    facility=OuterRef('pk'), resolved=False\n).values('facility').annotate(c=Count('*')).values('c')\n\nfacilities = facilities.annotate(open_alert_count=Subquery(open_alerts))\n```"
     },
     {
       "path": "apps/dashboard/resolvers.py",
       "line": 88,
       "side": "RIGHT",
-      "body": "💡 The `last_activity` field calls `studies.order_by('-created_at').first()` per facility. Since you're already querying facilities, consider adding `.annotate(last_activity=Max('studies__created_at'))` to get this in the same query."
+      "body": "💡 **Per-facility last activity query** · nice to have\n\nThe `last_activity` field calls `studies.order_by('-created_at').first()` per facility. Since you're already querying facilities, consider adding `.annotate(last_activity=Max('studies__created_at'))` to get this in the same query."
     }
   ]
 }
@@ -267,19 +267,19 @@ This document provides concrete examples of complete Claude reviews for referenc
 ```json
 {
   "event": "COMMENT",
-  "body": "## 📋 Summary\n\n> Adds paginated list endpoint for facility equipment inventory.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> [HUB-4567](https://linear.app/quantivly/issue/HUB-4567/)<br>\n✅ Aligned\n\n✅ **Highlights**\n- Proper use of DjangoFilterBackend for query parameters\n- Serializer validates equipment status transitions\n\n🚨 0 · ⚠️ 1 · 💡 1 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
+  "body": "## 📋 Summary\n\n> Adds paginated list endpoint for facility equipment inventory.\n\n<img src=\"https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png\" alt=\"Linear\" height=\"15\" align=\"absmiddle\"> **Linear**\n\n[HUB-4567](https://linear.app/quantivly/issue/HUB-4567/) — _Paginated equipment inventory endpoint_<br>\n✅ Aligned\n\n✅ **Highlights**\n- Proper use of DjangoFilterBackend for query parameters\n- Serializer validates equipment status transitions\n\n📊 **Findings** — 🚨 0 · ⚠️ 2 · 💡 0 — see inline comments\n\n---\n<sub>@reviewer<!-- METRICS --> · [Logs](https://github.com/quantivly/sre-core/actions/runs/12352) · 👍 👎</sub>",
   "comments": [
     {
       "path": "apps/equipment/views.py",
       "line": 38,
       "side": "RIGHT",
-      "body": "⚠️ **Unbounded queryset**\n\nThe `get_queryset` method returns `Equipment.objects.all()` without pagination defaults. If the frontend omits the `page` query parameter, Django REST Framework returns all rows in a single response.\n\n```suggestion\n    return Equipment.objects.all().order_by('id')[:100]\n```"
+      "body": "⚠️ **Unbounded queryset** · should fix\n\nThe `get_queryset` method returns `Equipment.objects.all()` without pagination defaults. If the frontend omits the `page` query parameter, Django REST Framework returns all rows in a single response.\n\n```suggestion\n    return Equipment.objects.all().order_by('id')[:100]\n```"
     },
     {
       "path": "apps/equipment/views.py",
       "line": 25,
       "side": "RIGHT",
-      "body": "⚠️ **Missing `select_related` for FK traversal**\n\nThe serializer accesses `equipment.facility.name` (line 52), but the queryset doesn't prefetch the facility relation. This creates an N+1 query — one additional query per equipment item.\n\nFix: Add `select_related` to the queryset in `get_queryset`:\n```python\nreturn Equipment.objects.select_related('facility').all()\n```\n\n(Not using a suggestion block because the fix applies to `get_queryset` at line 38, not to the viewset class definition at line 25 where the issue manifests.)"
+      "body": "⚠️ **Missing `select_related` for FK traversal** · should fix\n\nThe serializer accesses `equipment.facility.name` (line 52), but the queryset doesn't prefetch the facility relation. This creates an N+1 query — one additional query per equipment item.\n\n**Fix** — add `select_related` to the queryset in `get_queryset`:\n```python\nreturn Equipment.objects.select_related('facility').all()\n```\n\n(Not using a suggestion block because the fix applies to `get_queryset` at line 38, not to the viewset class definition at line 25 where the issue manifests.)"
     }
   ]
 }

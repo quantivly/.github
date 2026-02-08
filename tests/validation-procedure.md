@@ -10,7 +10,6 @@ This document describes how to test the Claude + GitHub integration end-to-end.
   - `ANTHROPIC_API_KEY` - Claude API key
   - `LINEAR_API_KEY` - Linear API key
 - [ ] Workflow file exists: `.github/workflows/claude-review.yml`
-- [ ] Review script exists: `scripts/claude-review.py`
 - [ ] Test repository with workflow deployed
 - [ ] You are an organization member or collaborator
 
@@ -75,14 +74,14 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 **Review Structure**:
 - [ ] Review comment appears on PR
 - [ ] All required sections present:
-  - [ ] Summary
-  - [ ] Alignment with Linear Requirements
-  - [ ] Critical Issues
-  - [ ] Suggestions
-  - [ ] Positive Observations
-  - [ ] Testing Assessment
-  - [ ] Recommendation
-- [ ] Review includes metadata footer (triggered by, powered by)
+  - [ ] 📋 Summary
+  - [ ] Linear (issue link, title, alignment)
+  - [ ] ✅ Highlights
+  - [ ] 📊 Findings (severity tally)
+  - [ ] Footer (commenter, logs, reactions)
+- [ ] Optional sections present when applicable:
+  - [ ] ⚙️ CI (when checks are failing or pending)
+  - [ ] 🔄 Re-review (on follow-up reviews)
 
 **Issue Detection**:
 - [ ] SQL injection flagged as CRITICAL
@@ -234,14 +233,13 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 ### Validation Checklist
 
 - [ ] Review posted successfully
-- [ ] **Critical Issues** section states "No critical issues identified"
-- [ ] **Positive Observations** mentions:
+- [ ] **📊 Findings** shows 🚨 0 · ⚠️ 0 · 💡 0 (or minimal suggestions)
+- [ ] **✅ Highlights** mentions:
   - [ ] Parameterized queries
   - [ ] Proper error handling
   - [ ] Comprehensive test coverage
   - [ ] Good docstrings
-- [ ] **Testing Assessment** is positive
-- [ ] **Recommendation** is **APPROVE** or **COMMENT**
+- [ ] Review event is **APPROVE** or **COMMENT**
 - [ ] Review acknowledges good practices
 
 ---
@@ -319,13 +317,13 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 ### Validation Checklist
 
 - [ ] Second review posted
-- [ ] Review body includes **Prior reviews** line (e.g., "Re-review (2). X of Y prior findings addressed.")
+- [ ] Review body includes **🔄 Re-review (2)** line (e.g., "2 of 2 prior findings addressed. Focusing on new/changed code.")
 - [ ] Fixed issues are NOT re-flagged as inline comments
 - [ ] New or remaining issues are flagged normally with inline comments
 - [ ] Review count is accurate (matches number of previous Claude reviews)
-- [ ] **Critical Issues** now shows issues resolved or "No critical issues"
-- [ ] **Positive Observations** mentions fixes
-- [ ] **Recommendation** changes to **APPROVE** or **COMMENT**
+- [ ] **📊 Findings** shows reduced or zero counts
+- [ ] **✅ Highlights** mentions fixes
+- [ ] Review event changes to **APPROVE** or **COMMENT**
 - [ ] Review acknowledges improvements
 
 ---
@@ -368,7 +366,7 @@ This document describes how to test the Claude + GitHub integration end-to-end.
 ### Validation Checklist
 
 - [ ] Review posted successfully
-- [ ] **Alignment with Linear Requirements** says "No Linear issue to validate against"
+- [ ] **Linear** section says "Not specified" (no issue link or title)
 - [ ] Review still checks security, logic, quality, etc.
 - [ ] No errors in workflow logs
 - [ ] Review completes normally
