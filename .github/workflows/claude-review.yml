@@ -107,6 +107,8 @@ jobs:
       - name: Checkout repository
         if: steps.validate.outputs.result != 'false'
         uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
 
       - name: Checkout .github repository for review standards
         if: steps.validate.outputs.result != 'false'
