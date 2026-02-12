@@ -147,24 +147,24 @@ jobs:
               return;
             }
             const body = context.payload.comment.body;
-            const match = body.match(/@claude\b[,:]?\s*(.*)/is);
-            if (!match) {
-              core.setOutput('custom', '');
-              core.setOutput('force', 'false');
-              return;
-            }
-            let instructions = match[1].trim();
 
-            // Detect `force` as first word (case-insensitive, optional comma/colon separator)
+            // Detect force flag: @claude force anywhere in the comment
             let forceReview = false;
-            const forceMatch = instructions.match(/^force\b[,:]?\s*/i);
-            if (forceMatch) {
+            if (/@claude\s+force\b/i.test(body)) {
               forceReview = true;
-              instructions = instructions.substring(forceMatch[0].length).trim();
               console.log('Force flag detected — will bypass staleness check');
             }
 
-            const generic = ['', 'review', 'please review', 'review this', 'please review this', 'review this pr', 'please review this pr'];
+            // Pass full comment as context, replacing @claude mentions with "Claude"
+            // for natural readability and stripping the "force" keyword
+            let instructions = body
+              .replace(/@claude\s+force\b/gi, 'Claude')
+              .replace(/@claude\b/gi, 'Claude')
+              .trim();
+
+            // Check if remaining text is generic (just "Claude" or "Claude review this" etc.)
+            const generic = ['', 'claude', 'claude review', 'claude please review', 'claude review this',
+                             'claude please review this', 'claude review this pr', 'claude please review this pr'];
             if (generic.includes(instructions.toLowerCase())) {
               core.setOutput('custom', '');
               core.setOutput('force', forceReview ? 'true' : 'false');
