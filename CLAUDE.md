@@ -272,6 +272,7 @@ The `prompt:` field in `claude-review.yml` is the most frequently edited part of
 - Replace dense single-paragraph instructions with concrete multi-line templates using structural boundaries (blockquotes, bullet lists) — dense paragraphs produce wildly inconsistent output
 - Remove redundant data from LLM input (CI_STATUS, PR context) — if info is in a URL, don't also append it as text; noise in input leaks unpredictably into output
 - Don't ask the LLM to state what the reader can already see (e.g., count above a single bullet) — instead have it synthesize relationships or insights across visible data
+- For behavioral issues (e.g., duplicate comments), add belt-and-suspenders constraints in the prompt alongside the code fix — LLMs benefit from explicit "do NOT" instructions even when the data feeding them is correct
 
 ### Documentation
 
@@ -350,6 +351,10 @@ The `prompt:` field in `claude-review.yml` is the most frequently edited part of
 9. **`issue_comment` checkout defaults to the repo's default branch**: `actions/checkout@v4` with no `ref` checks out `main`/`master`, not the PR branch. Use `ref: refs/pull/${{ github.event.issue.number }}/head` to get the PR's actual files. This matters for stacked PRs where files only exist on the PR branch.
 
 10. **GitHub blockquotes break first-match regex on `@mentions`**: Quoted replies prefix text with `> @user ...`. A regex matching the first `@claude` in the body will match inside the blockquote. When parsing `@mentions`, either scan all matches or use a pattern that skips blockquoted lines.
+
+11. **Central workflow changes require merge-first testing**: Caller workflows (sre-core, sre-ui, etc.) reference `claude-review.yml@master`. Changes to the central workflow must be merged to master before they can be tested via caller repos. For the `.github` repo's own `issue_comment` trigger, branch testing works directly.
+
+12. **Disabled steps cause silent downstream failures**: Steps that output values consumed by later steps (e.g., `count` from "Fetch previous review context" feeds into the staleness check condition `count >= 1`) will silently disable all downstream features when they early-return with default values. When modifying guards, trace the full output dependency chain.
 
 ## Git Workflow
 
