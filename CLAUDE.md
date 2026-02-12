@@ -347,6 +347,10 @@ The `prompt:` field in `claude-review.yml` is the most frequently edited part of
 
 8. **Marketing Coordination**: Profile README changes should be coordinated with marketing team to ensure consistent messaging.
 
+9. **`issue_comment` checkout defaults to the repo's default branch**: `actions/checkout@v4` with no `ref` checks out `main`/`master`, not the PR branch. Use `ref: refs/pull/${{ github.event.issue.number }}/head` to get the PR's actual files. This matters for stacked PRs where files only exist on the PR branch.
+
+10. **GitHub blockquotes break first-match regex on `@mentions`**: Quoted replies prefix text with `> @user ...`. A regex matching the first `@claude` in the body will match inside the blockquote. When parsing `@mentions`, either scan all matches or use a pattern that skips blockquoted lines.
+
 ## Git Workflow
 
 ### Commit Message Format

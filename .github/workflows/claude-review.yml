@@ -142,13 +142,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // workflow_call events have no comment payload
-            if (context.eventName === 'workflow_call') {
+            const body = context.payload?.comment?.body;
+            if (!body) {
               core.setOutput('custom', '');
               core.setOutput('force', 'false');
               return;
             }
-            const body = context.payload.comment.body;
 
             // Detect force flag: @claude force anywhere in the comment
             let forceReview = false;
@@ -188,14 +187,13 @@ jobs:
         with:
           github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
-            // workflow_call events may not have context.issue.number
-            if (context.eventName === 'workflow_call') {
+            const prNumber = context.issue?.number;
+            if (!prNumber) {
               core.setOutput('context', '');
               core.setOutput('count', '0');
-              console.log('Triggered via workflow_call — skipping previous review fetch');
+              console.log('No PR number available — skipping previous review fetch');
               return;
             }
-            const prNumber = context.issue.number;
             const repo = context.repo;
 
             // Derive bot login from the GitHub App slug (e.g. "quantivly-reviews" → "quantivly-reviews[bot]")
@@ -771,6 +769,7 @@ jobs:
              - Compare against the current diff to determine if prior findings are on unchanged vs. changed code
              - Prior findings on unchanged code should NOT be re-flagged as inline comments (they are already visible in the PR conversation)
              - Focus inline comments on: (a) new code not previously reviewed, (b) code changed since the last review, (c) prior findings addressed incorrectly or incompletely
+             - When re-reviewing, if you identify a finding that is semantically identical to a prior finding (same file, same line, same issue — even if worded differently), do NOT include it as an inline comment. Acknowledge addressed/unaddressed prior findings in the summary body only.
           4. Analyze the diff for security, logic, quality, testing, performance issues. Before flagging any issue, use `Read` to see the full file context around the location — do not flag issues based solely on diff snippets.
           5. If Linear issue provided, fetch requirements and validate alignment
           6. For each finding, note: file path, line number (from the new version of the file), severity, description
