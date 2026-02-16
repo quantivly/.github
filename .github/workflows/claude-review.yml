@@ -1076,8 +1076,58 @@ jobs:
           # Static prompt (cacheable) + dynamic PR context (appended at end)
           prompt: "${{ env.REVIEW_PROMPT }}\n${{ env.REVIEW_PROMPT_DYNAMIC }}"
 
-      - name: Update progress comment for retry
+      - name: Check if review was posted despite failure
+        id: review-check
         if: steps.claude-review-attempt.outcome == 'failure' && !steps.claude-review-attempt.outputs.execution_file
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.issue?.number;
+            if (!prNumber) {
+              core.setOutput('review_posted', 'false');
+              return;
+            }
+
+            const appSlug = process.env.APP_SLUG;
+            const botLogin = appSlug ? `${appSlug}[bot]` : 'github-actions[bot]';
+
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
+            const currentCount = reviews.filter(r => r.user.login === botLogin).length;
+            const previousCount = parseInt('${{ steps.previous-reviews.outputs.count }}', 10) || 0;
+
+            if (currentCount > previousCount) {
+              console.log(`Review was posted despite action failure (${previousCount} → ${currentCount}). Skipping retry.`);
+              core.setOutput('review_posted', 'true');
+            } else {
+              console.log(`No new review detected (count still ${currentCount}). Retry is appropriate.`);
+              core.setOutput('review_posted', 'false');
+            }
+
+      - name: Post partial failure notice
+        if: steps.review-check.outputs.review_posted == 'true'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `⚠️ Review posted successfully, but the action encountered a post-review error (execution metrics unavailable). [Workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) may have details.`,
+            });
+
+      - name: Update progress comment for retry
+        if: steps.claude-review-attempt.outcome == 'failure' && !steps.claude-review-attempt.outputs.execution_file && steps.review-check.outputs.review_posted != 'true'
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -1094,7 +1144,7 @@ jobs:
 
       - name: Run Claude PR Review (retry)
         id: claude-review-retry
-        if: steps.claude-review-attempt.outcome == 'failure' && !steps.claude-review-attempt.outputs.execution_file
+        if: steps.claude-review-attempt.outcome == 'failure' && !steps.claude-review-attempt.outputs.execution_file && steps.review-check.outputs.review_posted != 'true'
         timeout-minutes: 12
         uses: anthropics/claude-code-action@b113f49a56229d8276e2bf05743ad6900121239c # v1
         env:
