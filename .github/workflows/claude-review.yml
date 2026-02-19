@@ -39,7 +39,7 @@ jobs:
        github.event.comment.user.type != 'Bot')
 
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Validate commenter permissions
@@ -701,10 +701,11 @@ jobs:
           # CI status step may override model tier (e.g., Haiku → Sonnet when CI is failing)
           MODEL_TIER="${{ steps.ci-status.outputs.model_tier_override || steps.complexity.outputs.model_tier }}"
           case "$MODEL_TIER" in
-            haiku)  MAX_TURNS=8  ;;
-            opus)   MAX_TURNS=20 ;;
-            *)      MAX_TURNS=15 ;;
+            haiku)  MAX_TURNS=8;  STEP_TIMEOUT=8  ;;
+            opus)   MAX_TURNS=20; STEP_TIMEOUT=15 ;;
+            *)      MAX_TURNS=15; STEP_TIMEOUT=12 ;;
           esac
+          echo "step_timeout=$STEP_TIMEOUT" >> "$GITHUB_OUTPUT"
           MCP_FLAG=""
           if [ -f .mcp.json ]; then
             MCP_FLAG="--mcp-config .mcp.json"
@@ -1054,7 +1055,7 @@ jobs:
         id: claude-review-attempt
         if: steps.validate.outputs.result != 'false' && steps.staleness.outputs.skip != 'true'
         continue-on-error: true
-        timeout-minutes: 12
+        timeout-minutes: ${{ steps.review-config.outputs.step_timeout || 12 }}
         uses: anthropics/claude-code-action@b113f49a56229d8276e2bf05743ad6900121239c # v1
         env:
           # Linear MCP server (via .mcp.json) uses env var for API authentication
@@ -1145,7 +1146,7 @@ jobs:
       - name: Run Claude PR Review (retry)
         id: claude-review-retry
         if: steps.claude-review-attempt.outcome == 'failure' && !steps.claude-review-attempt.outputs.execution_file && steps.review-check.outputs.review_posted != 'true'
-        timeout-minutes: 12
+        timeout-minutes: ${{ steps.review-config.outputs.step_timeout || 12 }}
         uses: anthropics/claude-code-action@b113f49a56229d8276e2bf05743ad6900121239c # v1
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
@@ -1357,14 +1358,53 @@ jobs:
       - name: Post error on failure
         if: failure()
         uses: actions/github-script@v7
+        env:
+          ATTEMPT_OUTCOME: ${{ steps.claude-review-attempt.outcome }}
+          RETRY_OUTCOME: ${{ steps.claude-review-retry.outcome }}
+          HAS_EXECUTION_FILE: ${{ steps.claude-review-retry.outputs.execution_file || steps.claude-review-attempt.outputs.execution_file || '' }}
+          MODEL_TIER: ${{ steps.complexity.outputs.model_tier || 'unknown' }}
+          DIFF_LINES: ${{ steps.complexity.outputs.diff_lines || 'unknown' }}
+          STEP_TIMEOUT: ${{ steps.review-config.outputs.step_timeout || '12' }}
         with:
           github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
+            const attemptOutcome = process.env.ATTEMPT_OUTCOME;
+            const retryOutcome = process.env.RETRY_OUTCOME;
+            const hasExecFile = process.env.HAS_EXECUTION_FILE;
+            const modelTier = process.env.MODEL_TIER;
+            const diffLines = process.env.DIFF_LINES;
+            const stepTimeout = process.env.STEP_TIMEOUT;
+            const logsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let message;
+
+            if (retryOutcome === 'failure' && !hasExecFile) {
+              // Both attempts failed without execution files — likely timeout or API errors
+              message = [
+                `⏱️ **Claude review timed out** after two attempts (${stepTimeout}m limit per attempt).`,
+                ``,
+                `This is a ${diffLines}-line PR reviewed with ${modelTier} — large diffs with Opus may exceed the time limit.`,
+                ``,
+                `**Options:**`,
+                `- Retry with \`@claude\` (transient issues often resolve on retry)`,
+                `- Use \`@claude force\` to bypass staleness checks`,
+                `- Split the PR into smaller chunks for more reliable reviews`,
+                ``,
+                `[Workflow logs](${logsUrl})`,
+              ].join('\n');
+            } else if (attemptOutcome === 'failure' && retryOutcome === 'failure') {
+              // Both failed but had execution files — Claude ran but errored
+              message = `❌ Claude review failed on both attempts. [Workflow logs](${logsUrl}) may have details.\n\nTo retry, post a new comment mentioning Claude.`;
+            } else {
+              // Generic fallback
+              message = `❌ Claude review failed. Check [workflow logs](${logsUrl}) for details.\n\nTo retry, post a new comment mentioning Claude.`;
+            }
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `❌ Claude review failed. Check [workflow logs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n\nTo retry, post a new comment mentioning Claude.`
+              body: message,
             });
 
       - name: Post cost warning for expensive reviews
