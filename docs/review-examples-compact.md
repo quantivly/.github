@@ -159,6 +159,18 @@ Condensed version of [review-examples.md](review-examples.md) for the CI review 
 
 **Why wrong**: Line 45 contains business logic — the suggestion would replace it with `import csv`. Suggestion blocks replace the targeted line(s) exactly. Use a regular code block and explain where the fix belongs.
 
+### Anti-Example E: Hallucinated Version in Suggestion Block
+
+```json
+{
+  "comments": [
+    {"path": "docker-compose.yml", "line": 8, "side": "RIGHT", "body": "⚠️ **Pin Docker image version** · nice to have\n\nThe `:latest` tag is mutable. Pin to a specific version for reproducibility.\n\n```suggestion\n    image: tecnativa/docker-socket-proxy:0.1.2\n```"}
+  ]
+}
+```
+
+**Why wrong**: Version `0.1.2` was fabricated — it doesn't exist (real latest: `0.4.2`). Verify versions exist before suggesting them using `curl -sf "https://hub.docker.com/v2/repositories/OWNER/IMAGE/tags/..."`. If verification fails, use a placeholder (`<PIN_VERSION>`) in a regular code block with a note to check the registry.
+
 ---
 
 **Last Updated**: 2026-02-08
