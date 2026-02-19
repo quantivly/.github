@@ -714,7 +714,7 @@ jobs:
             echo 'REVIEW_CLAUDE_ARGS<<__CLAUDE_ARGS_DELIM__'
             cat <<__ARGS_CONTENT__
           --model ${{ steps.ci-status.outputs.model_override || steps.complexity.outputs.model }}
-          --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh run view:*),Bash(gh api -X POST:*),Bash(gh api -X PATCH:*),Bash(gh api repos/:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
+          --allowedTools "mcp__linear__*,Bash(gh pr:*),Bash(gh run view:*),Bash(gh api -X POST:*),Bash(gh api -X PATCH:*),Bash(gh api repos/:*),Bash(curl -sf https://hub.docker.com:*),Bash(curl -sf https://registry.npmjs.org:*),Bash(curl -sf https://pypi.org:*),Bash(git log:*),Bash(git show:*),Bash(git diff:*),Read,Glob,Grep,LS"
           --max-turns ${MAX_TURNS}
           ${MCP_FLAG}
           __ARGS_CONTENT__
@@ -866,6 +866,13 @@ jobs:
 
           **Suggestion blocks**: For every inline comment, ask "can this fix replace the commented line(s)?" If yes, use a suggestion block — including for multi-line SQL, Python, or config replacements.
 
+          **Version verification**: When suggesting a version pin (Docker image tag, npm/pip package, GitHub Action SHA), verify the version exists before including it:
+          - Docker Hub: `curl -sf "https://hub.docker.com/v2/repositories/OWNER/IMAGE/tags/?page_size=5&ordering=last_updated" | jq -r '.results[].name'`
+          - npm: `curl -sf "https://registry.npmjs.org/PACKAGE/latest" | jq -r '.version'`
+          - PyPI: `curl -sf "https://pypi.org/pypi/PACKAGE/json" | jq -r '.info.version'`
+          - GitHub releases: `gh api repos/OWNER/REPO/releases/latest --jq '.tag_name'`
+          If verification succeeds, use the confirmed version in a suggestion block. If verification fails (network error, private registry, unlisted package), use a placeholder like `<PIN_VERSION>` in a regular code block with a note to verify at the registry.
+
           ## Review Standards and Examples
 
           Read `.github-org/docs/review-standards.md` for severity levels, checklists, false positive list, silent failure patterns, testing assessment criteria, PR-type triage, cross-repo validation, and Quantivly's repository architecture.
@@ -896,6 +903,7 @@ jobs:
           4. This is NOT something pre-commit hooks (ruff, black, mypy) would catch
           5. For each suggestion block: the replacement code exactly replaces the targeted line(s) and would be valid code if applied
           6. Multi-line suggestions use both `start_line`/`start_side` and `line`/`side`
+          7. If my suggestion contains a specific version number, image tag, commit SHA, or package reference that is NOT already present in the repository's existing files, I verified it exists using the registry verification tools above — or used a placeholder with a note to verify
 
           If uncertain about a finding, move it to the summary body rather than keeping it as an inline comment.
 
