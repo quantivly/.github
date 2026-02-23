@@ -1072,7 +1072,6 @@ jobs:
           HAS_EXECUTION_FILE: ${{ steps.claude-review-retry.outputs.execution_file || steps.claude-review-attempt.outputs.execution_file || '' }}
           MODEL_TIER: ${{ steps.complexity.outputs.model_tier || 'unknown' }}
           DIFF_LINES: ${{ steps.complexity.outputs.diff_lines || 'unknown' }}
-          STEP_TIMEOUT: ${{ steps.review-config.outputs.step_timeout || '12' }}
         with:
           github-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
@@ -1081,22 +1080,21 @@ jobs:
             const hasExecFile = process.env.HAS_EXECUTION_FILE;
             const modelTier = process.env.MODEL_TIER;
             const diffLines = process.env.DIFF_LINES;
-            const stepTimeout = process.env.STEP_TIMEOUT;
             const logsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
             let message;
 
             if (retryOutcome === 'failure' && !hasExecFile) {
-              // Both attempts failed without execution files — likely timeout or API errors
+              // Both attempts failed without execution files — could be timeout, API error,
+              // or action initialization failure. Don't assume the cause.
               message = [
-                `⏱️ **Claude review timed out** after two attempts (${stepTimeout}m limit per attempt).`,
+                `❌ **Claude review failed** after two attempts (no output produced).`,
                 ``,
-                `This is a ${diffLines}-line PR reviewed with ${modelTier} — large diffs with Opus may exceed the time limit.`,
+                `This is a ${diffLines}-line PR reviewed with ${modelTier}. Check [workflow logs](${logsUrl}) for error details.`,
                 ``,
                 `**Options:**`,
                 `- Retry with \`@claude\` (transient issues often resolve on retry)`,
                 `- Use \`@claude force\` to bypass staleness checks`,
-                `- Split the PR into smaller chunks for more reliable reviews`,
                 ``,
                 `[Workflow logs](${logsUrl})`,
               ].join('\n');
