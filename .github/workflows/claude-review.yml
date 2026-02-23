@@ -848,8 +848,12 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               comment_id: commentId,
-              body: '🤖 **Claude review retrying...**\n\n⚠️ First attempt did not complete successfully. Retrying automatically...',
+              body: '🤖 **Claude review retrying...**\n\n⚠️ First attempt did not complete successfully. Retrying in 60 seconds...',
             });
+
+      - name: Backoff before retry
+        if: steps.claude-review-attempt.outcome == 'failure' && !steps.claude-review-attempt.outputs.execution_file && steps.review-check.outputs.review_posted != 'true'
+        run: sleep 60
 
       - name: Run Claude PR Review (retry)
         id: claude-review-retry
