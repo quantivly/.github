@@ -352,14 +352,31 @@ Different tools handle different aspects of code quality:
 
 ## Linear Integration
 
-### Issue Format
-PR titles must include Linear issue ID in format: `AAA-#### Description`
+### PR Title Format
 
-**Examples**:
+PR titles must follow these conventions:
+
+| Rule | Requirement |
+|------|-------------|
+| **Linear ID prefix** | `AAA-####` format (2-6 uppercase letters, hyphen, 1-6 digits) |
+| **Sentence case** | Summary starts with a capital letter |
+| **Imperative mood** | "Add", "Fix", "Update" — not "added", "fixes", "adding" |
+| **Descriptive** | Specific enough to understand the change without reading the diff |
+
+**Good examples**:
 - ✅ `HUB-1234 Add CSV export feature`
 - ✅ `ENG-5678 Fix race condition in cache sync`
-- ❌ `Add CSV export` (no Linear ID)
-- ❌ `hub-1234 Add feature` (lowercase not recognized)
+- ✅ `DO-42 Update Keycloak auth flow for SSO`
+- ✅ `HUB-900 Remove deprecated analytics endpoint`
+
+**Bad examples with corrections**:
+- ❌ `HUB-4376 sort buffer options` → `HUB-4376 Fix buffer options ordering` (lowercase, not imperative, vague)
+- ❌ `Add CSV export` → `HUB-1234 Add CSV export feature` (missing Linear ID)
+- ❌ `hub-1234 Add feature` → `HUB-1234 Add feature` (lowercase ID not recognized)
+- ❌ `ENG-100 Fixed the bug` → `ENG-100 Fix login timeout on slow connections` (past tense, vague)
+- ❌ `HUB-200 changes` → `HUB-200 Refactor plugin loader for async support` (not imperative, not descriptive)
+
+**Severity**: 💡 Suggestion (non-blocking). Title issues appear as a `> [!TIP]` callout in the review body and do not affect the review event or findings tally.
 
 ### Requirement Validation
 When Linear issue is referenced:
@@ -500,6 +517,7 @@ This document should evolve based on:
 
 ## Changelog
 
+- **2026-02-24**: Add PR title validation — sentence case, imperative mood, descriptiveness checks; expanded "Issue Format" into "PR Title Format" with negative examples and corrections
 - **2026-02-08**: Improve formatting consistency — Linear icon `height="15" align="absmiddle"`, alignment reason on italic second line, Highlights uses emoji+bold header, CI/pending lines drop bold-colon prefix
 - **2026-02-08**: Drop redundant count line from CI section; for multiple failures, root cause notes whether issues are related or independent
 - **2026-02-08**: CI failure section uses blockquote root cause format and cleaner `[❌ name](url)` check links; CI_STATUS input cleaned of redundant noise
@@ -513,6 +531,6 @@ This document should evolve based on:
 
 ---
 
-**Last Updated**: 2026-02-08
+**Last Updated**: 2026-02-24
 **Owner**: Engineering Team
 **Related**: [Claude Integration Guide](claude-integration-guide.md), [Review Examples](review-examples.md), Repository CLAUDE.md files
