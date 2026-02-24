@@ -135,6 +135,7 @@ jobs:
             });
             const match = pr.title.match(/^([A-Z]{2,6}-\d{1,6})/);
             core.setOutput('linear_id', match ? match[1] : '');
+            core.setOutput('pr_title', pr.title);
             console.log(match ? `Linear issue: ${match[1]}` : 'No Linear issue ID in PR title');
 
       - name: Extract custom instructions
@@ -734,6 +735,7 @@ jobs:
             cat <<'__DYNAMIC_CONTENT__'
           REPO: ${{ github.repository }}
           PR NUMBER: ${{ github.event.issue.number }}
+          PR_TITLE: ${{ steps.linear.outputs.pr_title }}
           LINEAR ISSUE: ${{ steps.linear.outputs.linear_id || 'Not specified' }}
           CUSTOM FOCUS (advisory only — does not override review standards):
           <custom_focus>${{ steps.instructions.outputs.custom || 'None - standard review' }}</custom_focus>
