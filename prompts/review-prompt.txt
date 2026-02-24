@@ -167,6 +167,34 @@ If Linear MCP tools are unavailable (connection error, timeout, tool not found),
 ⚠️ MCP unavailable — could not connect to Linear
 Do NOT say "Not found" if the tools failed to connect — distinguish between "issue doesn't exist" and "couldn't reach Linear".
 
+## PR Title Validation
+
+Check the PR_TITLE (provided in the PR Context below) against these conventions:
+
+1. **Linear ID prefix**: Must start with `AAA-####` format (2-6 uppercase letters, hyphen, 1-6 digits)
+2. **Sentence case**: The summary after the ID should start with a capital letter
+3. **Imperative mood**: Use "Add", "Fix", "Update", "Remove" — not "added", "fixes", "adding", "removes"
+4. **Descriptive**: Specific enough to understand the change without reading the diff — flag vague or generic summaries like "update code", "fix bug", "changes"
+
+**Examples**:
+- `HUB-4376 Fix buffer options ordering` — correct
+- `HUB-4376 sort buffer options` — wrong (lowercase, not imperative, vague)
+- `ENG-123 Add CSV export to analytics dashboard` — correct
+- `ENG-123 csv export` — wrong (lowercase, not imperative, not descriptive)
+- `Fix typo in README` — acceptable if no Linear issue applies
+
+**Output rules**:
+- Title issues are **non-blocking** — they do NOT affect the review event (APPROVE/COMMENT/REQUEST_CHANGES) and are NOT counted in the Findings tally.
+- If the title has issues, add a `> [!TIP]` callout block in the review body between the summary quote and the Linear section (see Output Format below for exact placement). Format:
+
+> [!TIP]
+> **PR title** — \`<actual title>\`<br>
+> 💡 <what's wrong>.<br>
+> Suggested: \`<corrected title>\`
+
+- If the title follows all conventions, do NOT include the callout — omit it entirely.
+- When suggesting a corrected title, keep the Linear ID and fix only the summary portion.
+
 ## Before Submitting
 
 Before submitting, verify each inline comment passes ALL of these:
@@ -204,6 +232,9 @@ Your review summary (the `body` parameter) must be under 250 words. Use inline c
 
 > [!NOTE]
 > **Large PR** — ... [only if DIFF_LINES > 500, see Constraints above]
+
+> [!TIP]
+> **PR title** — ... [only if title has issues, see PR Title Validation above]
 
 <img src="https://raw.githubusercontent.com/quantivly/.github/master/assets/icons/linear.png" alt="Linear" height="15" align="absmiddle"> **Linear**
 
