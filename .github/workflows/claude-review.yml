@@ -242,8 +242,11 @@ jobs:
               per_page: 100,
             });
 
-            // Collect bot findings from the latest review
-            const botFindings = allComments.filter(c => c.pull_request_review_id === latest.id);
+            // Collect findings from ALL Claude reviews (not just latest).
+            // In cascaded re-reviews, the latest review may be a clean approval
+            // while earlier reviews have the actual inline findings.
+            const claudeReviewIds = new Set(claudeReviews.map(r => r.id));
+            const botFindings = allComments.filter(c => claudeReviewIds.has(c.pull_request_review_id));
             const botCommentIds = new Set(botFindings.map(c => c.id));
 
             // Find author replies to bot findings (via in_reply_to_id thread structure)
@@ -279,7 +282,7 @@ jobs:
             contextStr += `### Latest Review Summary\n${bodySummary}\n`;
 
             if (reviewComments.length > 0) {
-              contextStr += `\n### Latest Review Inline Findings (${reviewComments.length})\n`;
+              contextStr += `\n### Inline Findings Across All Reviews (${reviewComments.length})\n`;
               contextStr += reviewComments.join('\n');
             }
 
@@ -292,10 +295,17 @@ jobs:
             core.setOutput('count', String(reviewCount));
             // Output the commit SHA the latest review was submitted on (for staleness detection)
             core.setOutput('last_review_commit', latest.commit_id || '');
+            // Output the earliest review commit that has inline findings (for delta baseline).
+            // This ensures the diff shows all code changes since findings were first raised,
+            // not just since the latest (possibly clean) review.
+            const firstReviewWithFindings = claudeReviews
+              .find(r => allComments.some(c => c.pull_request_review_id === r.id));
+            core.setOutput('last_finding_commit', firstReviewWithFindings?.commit_id || latest.commit_id || '');
             // Output the latest review state (APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED)
             core.setOutput('last_review_state', latest.state || '');
             console.log(`Found ${reviewCount} previous Claude review(s). Context: ${contextStr.length} chars`);
             console.log(`Latest review commit: ${latest.commit_id || 'unknown'}, state: ${latest.state || 'unknown'}`);
+            console.log(`First review with findings commit: ${firstReviewWithFindings?.commit_id || 'none'}`);
 
       - name: Check for stale re-reviews
         id: staleness
@@ -361,10 +371,10 @@ jobs:
 
       - name: Compute diff since last review
         id: delta
-        if: steps.validate.outputs.result != 'false' && steps.staleness.outputs.skip != 'true' && steps.previous-reviews.outputs.last_review_commit != ''
+        if: steps.validate.outputs.result != 'false' && steps.staleness.outputs.skip != 'true' && steps.previous-reviews.outputs.last_finding_commit != ''
         continue-on-error: true
         env:
-          LAST_REVIEW_COMMIT: ${{ steps.previous-reviews.outputs.last_review_commit }}
+          LAST_REVIEW_COMMIT: ${{ steps.previous-reviews.outputs.last_finding_commit }}
         run: |
           # Compute what changed since the last review for focused re-review.
           # We need the actual unified diff (not just --stat) so the LLM can
