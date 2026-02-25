@@ -242,13 +242,35 @@ jobs:
               per_page: 100,
             });
 
-            const reviewComments = allComments
-              .filter(c => c.pull_request_review_id === latest.id)
-              .map(c => {
-                const firstSentence = (c.body || '').split(/[.\n]/)[0].trim();
-                const entry = `- \`${c.path}:${c.line || c.original_line || '?'}\` ${firstSentence}`;
-                return entry.length > 120 ? entry.substring(0, 117) + '...' : entry;
-              });
+            // Collect bot findings from the latest review
+            const botFindings = allComments.filter(c => c.pull_request_review_id === latest.id);
+            const botCommentIds = new Set(botFindings.map(c => c.id));
+
+            // Find author replies to bot findings (via in_reply_to_id thread structure)
+            const repliesByParent = new Map();
+            for (const c of allComments) {
+              if (c.in_reply_to_id && botCommentIds.has(c.in_reply_to_id) && c.user.login !== botLogin) {
+                if (!repliesByParent.has(c.in_reply_to_id)) repliesByParent.set(c.in_reply_to_id, []);
+                repliesByParent.get(c.in_reply_to_id).push({
+                  user: c.user.login,
+                  body: (c.body || '').substring(0, 80),
+                });
+              }
+            }
+
+            // Build finding entries with reply annotations
+            const reviewComments = botFindings.map(c => {
+              const firstSentence = (c.body || '').split(/[.\n]/)[0].trim();
+              let entry = `- \`${c.path}:${c.line || c.original_line || '?'}\` ${firstSentence}`;
+
+              const replies = repliesByParent.get(c.id);
+              if (replies && replies.length > 0) {
+                const snippet = replies[0].body.split(/[.\n]/)[0].trim();
+                entry += ` [author replied: "${snippet}"]`;
+              }
+
+              return entry.length > 180 ? entry.substring(0, 177) + '...' : entry;
+            });
 
             // Build context string
             const date = new Date(latest.submitted_at).toISOString().split('T')[0];
@@ -344,11 +366,27 @@ jobs:
         env:
           LAST_REVIEW_COMMIT: ${{ steps.previous-reviews.outputs.last_review_commit }}
         run: |
-          # Compute what changed since the last review for focused re-review
-          DELTA=$(git diff "$LAST_REVIEW_COMMIT"..HEAD --stat 2>/dev/null || echo "Unable to compute delta — commit may have been force-pushed")
+          # Compute what changed since the last review for focused re-review.
+          # We need the actual unified diff (not just --stat) so the LLM can
+          # determine whether specific prior findings were addressed.
+
+          # Ensure the last review commit is reachable in our shallow clone
+          git fetch --deepen=50 2>/dev/null || true
+          if ! git cat-file -e "$LAST_REVIEW_COMMIT" 2>/dev/null; then
+            git fetch origin "$LAST_REVIEW_COMMIT" --depth=1 2>/dev/null || true
+          fi
+
+          if git cat-file -e "$LAST_REVIEW_COMMIT" 2>/dev/null; then
+            DELTA=$(git diff "$LAST_REVIEW_COMMIT"..HEAD 2>/dev/null | head -200)
+            if [ -z "$DELTA" ]; then
+              DELTA="No changes between last review commit and HEAD."
+            fi
+          else
+            DELTA="Unable to compute delta — last review commit not reachable."
+          fi
           {
             echo "delta<<DELTA_EOF"
-            echo "$DELTA" | head -50
+            echo "$DELTA"
             echo "DELTA_EOF"
           } >> "$GITHUB_OUTPUT"
 

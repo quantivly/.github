@@ -39,11 +39,12 @@ Step 2: SUBMIT — One gh api call with summary + inline comments array
 1. Read `.github-org/docs/review-standards.md`, `.github-org/docs/review-examples-compact.md`, and the repo's `CLAUDE.md`
 2. Run `gh pr diff $PR_NUMBER` to get the unified diff
 3. Check the PREVIOUS REVIEW CONTEXT (provided at the end of this prompt). If previous reviews exist:
-   - Note which files/lines had prior findings
-   - Compare against the current diff to determine if prior findings are on unchanged vs. changed code
-   - Prior findings on unchanged code should NOT be re-flagged as inline comments (they are already visible in the PR conversation)
-   - Focus inline comments on: (a) new code not previously reviewed, (b) code changed since the last review, (c) prior findings addressed incorrectly or incompletely
-   - When re-reviewing, if you identify a finding that is semantically identical to a prior finding (same file, same line, same issue — even if worded differently), do NOT include it as an inline comment. Acknowledge addressed/unaddressed prior findings in the summary body only.
+   - For each prior inline finding, determine if it was **addressed** using these signals:
+     a. **Delta diff**: Check "Changes Since Last Review" for modifications at or near the finding's file:line. If the code at the flagged location was changed, verify the original issue no longer exists.
+     b. **Author replies**: If the finding shows `[author replied: "..."]`, the author believes it's resolved — verify in the delta diff.
+     c. A finding is "addressed" if the delta shows the relevant code was changed and the fix resolves the issue. A finding is "unaddressed" only if the code at that location was NOT changed in the delta.
+   - Do NOT re-flag addressed or unaddressed prior findings as inline comments. Summarize their status in the review body only.
+   - Focus inline comments exclusively on: (a) new code not previously reviewed, (b) code changed since last review that introduces a new issue, (c) a fix attempt that introduced a different problem.
 4. Analyze the diff for security, logic, quality, testing, performance issues. Before flagging any issue, use `Read` to see the full file context around the location — do not flag issues based solely on diff snippets.
 5. If Linear issue provided, fetch requirements and validate alignment
 6. For each finding, note: file path, line number (from the new version of the file), severity, description
@@ -258,7 +259,10 @@ If multiple checks are failing, note whether the failures share a root cause or 
 [Do NOT include a "N check(s) failing" count line — the bulleted list is self-explanatory.]
 [If checks still pending: "⏳ N check(s) still running — review proceeds without CI signal." If all pass or CI unavailable: omit the **CI** line entirely.]
 
-[If PREVIOUS_REVIEW_COUNT > 0: "🔄 **Re-review (PREVIOUS_REVIEW_COUNT + 1)**<br>X of Y prior findings addressed. Focusing on new/changed code." If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
+[If PREVIOUS_REVIEW_COUNT > 0: "🔄 **Re-review (PREVIOUS_REVIEW_COUNT + 1)**<br>
+X of Y prior findings addressed (based on delta diff analysis). Focusing on new code since last review."
+Determine X by checking each prior finding against the delta diff — count findings whose flagged code was modified and the issue resolved. Do NOT default to 0.
+If PREVIOUS_REVIEW_COUNT is 0: omit this line entirely.]
 
 🌟 **Highlights**
 - [Notable good practice]
@@ -283,7 +287,7 @@ The `<!-- METRICS -->` marker must appear exactly as shown — do not add conten
 ---
 
 Keep the summary short. All code-specific findings go in the `comments` array. Project-level findings belong in the `body` only. If the only findings are project-level, submit with an empty `comments` array.
-If previous reviews exist (PREVIOUS_REVIEW_COUNT > 0), prioritize new findings. Acknowledge addressed issues briefly in the summary. Only re-flag a prior finding as an inline comment if the fix attempt introduced a new problem.
+If previous reviews exist (PREVIOUS_REVIEW_COUNT > 0), prioritize new findings. For each prior finding, check the delta diff to determine if the flagged code changed — report the addressed/unaddressed tally in the summary. Only re-flag a prior finding as an inline comment if the fix attempt introduced a new problem.
 Format each inline comment as: `<emoji> **<Short Title>** · <action>` followed by explanation and fix.
 - 🚨 · must fix — security and data loss issues
 - ⚠️ · should fix — bugs and logic errors
