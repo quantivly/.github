@@ -1,34 +1,21 @@
+This body becomes the squash commit message on `main` — replace every placeholder line below and delete this one. Prose only: no code blocks >~10 lines, no `Co-Authored-By:` lines, no checkboxes.
+
 ## Summary
-<!-- Brief description of what this PR does -->
 
-## Linear Issue
-<!-- Link to Linear issue: HUB-1234, ENG-5678, etc. -->
+*Replace: 1–3 sentences — what changed and why.*
 
-## Changes
-<!-- List of key changes -->
--
--
+## Linear
 
-## Testing
-<!-- How was this tested? -->
-- [ ] Unit tests added/updated
-- [ ] Integration tests pass
-- [ ] Manual testing completed
-- [ ] Documentation updated
+*Replace: [TEAM-XXXX](https://linear.app/quantivly/issue/TEAM-XXXX), or "No Linear issue (infra/meta)".*
 
-## Claude Review
-<!-- Automated code review -->
-- [ ] Claude review completed (comment `@claude` to trigger)
-- [ ] CRITICAL issues addressed
-- [ ] HIGH severity issues addressed
+## Test plan
 
-## Checklist
-- [ ] PR title follows format: `AAA-#### Summary` (imperative mood)
-- [ ] Commit messages follow conventions (enh/fix/ref/doc/test)
-- [ ] Linear issue linked and updated
-- [ ] Pre-commit hooks pass (`pre-commit run --all-files`)
-- [ ] Breaking changes documented
-- [ ] Reviewers assigned
+*Replace: what was run / manually verified / explicitly not covered — stated as facts.*
 
-## Additional Context
-<!-- Any additional information, screenshots, or context -->
+## Risk & rollback
+
+*Replace: worst-case impact and how to revert. Delete this section for meta-only changes.*
+
+## AI assistance
+
+*Replace or delete: flag only if AI generated a substantive design choice or non-trivial logic block (trailer + badge are universal).*
