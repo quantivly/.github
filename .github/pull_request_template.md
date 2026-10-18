@@ -1,4 +1,4 @@
-This body becomes the squash commit message on `main` — replace every placeholder line below and delete this one. Prose only: no code blocks >~10 lines, no `Co-Authored-By:` lines, no checkboxes.
+For reviewers: replace each placeholder below, delete this line, and drop any section that doesn't apply. No unchecked `- [ ]` boxes (`pr-body-lint` fails on them). The squash commit is written at merge time, not from this body.
 
 ## Summary
 
