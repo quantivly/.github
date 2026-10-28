@@ -14,7 +14,7 @@ This is the **Quantivly `.github` organization repository** — a special GitHub
 - Define default community health files for all organization repositories
 - Host `assets/` for public URLs (e.g., icons used in CI output)
 
-**Claude review system**: The automated PR review workflow, prompts, standards, and documentation live in the private [`quantivly/ci`](https://github.com/quantivly/ci) repository. This repo only has a thin caller workflow in `.github/workflows/claude-review.yml`.
+**Claude review system**: The automated PR review workflow, prompts, standards, and documentation live in the private [`quantivly/ci`](https://github.com/quantivly/ci) repository. This repo has no workflows: a public repo cannot call a private repo's reusable workflow, so its caller was removed (DO-394) and PRs here get no `@claude` review, only the required human approval.
 
 ## Repository Structure
 
@@ -23,7 +23,6 @@ This is the **Quantivly `.github` organization repository** — a special GitHub
   profile/README.md              # Org profile (PUBLIC, visible on github.com/quantivly)
   assets/icons/linear.png        # Public icon used in review output
   .github/
-    workflows/claude-review.yml  # Caller workflow pointing to quantivly/ci
     pull_request_template.md     # Default PR template for org repos
     CODEOWNERS                   # Review gate for profile changes
   CLAUDE.md                      # This file
@@ -73,8 +72,8 @@ This is the **Quantivly `.github` organization repository** — a special GitHub
 - Include appropriate labels and helpful placeholders
 
 **Pull Request Templates**:
-- Enforce Linear issue reference (AAA-#### format)
-- Checklist for tests, docs, breaking changes
+- Sections: Summary, Linear, Test plan, Risk & rollback, AI assistance
+- No `- [ ]` checkboxes (`pr-body-lint` fails on them)
 - Imperative mood in title
 
 **Community Files**:
@@ -114,5 +113,4 @@ Use imperative mood. If no Linear issue, use descriptive summary only.
 
 - `profile/README.md` - Organization profile page (PUBLIC, visible on github.com/quantivly)
 - `assets/icons/linear.png` - Icon used in CI review output (public URL must stay stable)
-- `.github/workflows/claude-review.yml` - Caller workflow for reviewing this repo's PRs
 - `.github/pull_request_template.md` - Default PR template for all org repos
